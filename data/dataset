@@ -1,0 +1,60 @@
+from audio_data_pytorch import MetaDataset, WAVDataset, AllTransform
+from audio_data_pytorch.datasets.wav_dataset import get_all_wav_filenames
+from tinytag import TinyTag
+from mutagen import File
+
+def exists(val):
+    return val is not None
+
+def default(val, d):
+    return val if exists(val) else d
+
+
+class LyricsDataset(MetaDataset):
+    def __init__(self, path, metadata_mapping_path, **kwargs):
+        super().__init__(path=path, metadata_mapping_path=metadata_mapping_path, **kwargs)
+        self.wavs = get_all_wav_filenames(path, recursive=False)
+
+    def __len__(self) -> int:
+        return super().__len__()
+
+    def __getitem__(self, idx):
+        print(f"Here: {self.wavs[idx]}")
+        lyrics = File(self.wavs[idx]).get('lyrics', "")
+        audio, artist, genre = super().__getitem__(idx)
+        return audio, artist, genre, lyrics
+        
+
+        
+
+def get_dataset(path, metadata_mapping_path, sample_rate=48000, crop_size=2**20, random_crop_size=None, loudness=None, scale=None, stereo=True, mono=False):
+    transforms = AllTransform(
+        source_rate = None,
+        target_rate = None,
+        crop_size = crop_size,
+        random_crop_size = None,
+        loudness = loudness,
+        scale = scale,
+        mono = mono,
+        stereo = stereo,
+    )
+
+
+    return LyricsDataset(
+        path = [path], # Path or list of paths from which to load files
+        metadata_mapping_path = None,
+        #**kwargs Forwarded to `MetaDataset`
+        recursive = False, # Recursively load files from provided paths
+        sample_rate = sample_rate, # Specify sample rate to convert files to on read
+        random_crop_size = random_crop_size, # Load small portions of files randomly
+        transforms = transforms, # Transforms to apply to audio files
+        check_silence = True # Discards silent samples if true
+    )
+
+
+
+if __name__ == "__main__":
+    dataset = get_dataset(path="/Users/gio/spotdl/", metadata_mapping_path="/Users/gio/spotdl/meta")
+    for audio, artist, genre, lyrics in dataset:
+        print(audio, artist, genre, lyrics)
+        print(audio.shape)
