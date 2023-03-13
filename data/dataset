@@ -1,7 +1,13 @@
 from audio_data_pytorch import MetaDataset, WAVDataset, AllTransform
 from audio_data_pytorch.datasets.wav_dataset import get_all_wav_filenames
-from tinytag import TinyTag
 from mutagen import File
+import regex as re
+from datetime import datetime
+import numpy as np
+from typing import Callable, Dict, List, Optional, Sequence, Tuple, TypeVar, Union
+import sounddevice as sd
+
+
 
 def exists(val):
     return val is not None
@@ -9,29 +15,83 @@ def exists(val):
 def default(val, d):
     return val if exists(val) else d
 
+def isclose_datetime(t1, t2, rel_tol=0, abs_tol=1.0):
+
+    # combine each time object with a date to create a datetime object
+    dt1 = datetime.combine(datetime.today(), t1)
+    dt2 = datetime.combine(datetime.today(), t2)
+    # Calculate the difference between the two datetimes
+    diff = abs((dt1 - dt2).total_seconds())
+    
+    # Calculate the maximum allowed difference based on the relative and absolute tolerances
+    max_diff = max(rel_tol * diff, abs_tol)
+    
+    # Check if the difference is within the maximum allowed difference
+    return diff <= max_diff
+
+def select(key, **kwargs):
+    value = kwargs.get(key, None)
+    return value
+
+def group_dict_by_prefix(prefix: str, d: Dict) -> Tuple[Dict, Dict]:
+    return_dicts: Tuple[Dict, Dict] = ({}, {})
+    for key in d.keys():
+        no_prefix = int(not key.startswith(prefix))
+        return_dicts[no_prefix][key] = d[key]
+    return return_dicts
+
+
+def groupby(prefix: str, d: Dict, keep_prefix: bool = False) -> Tuple[Dict, Dict]:
+    kwargs_with_prefix, kwargs = group_dict_by_prefix(prefix, d)
+    if keep_prefix:
+        return kwargs_with_prefix, kwargs
+    kwargs_no_prefix = {k[len(prefix) :]: v for k, v in kwargs_with_prefix.items()}
+    return kwargs_no_prefix, kwargs
+
+
+def prefix_dict(prefix: str, d: Dict) -> Dict:
+    return {prefix + str(k): v for k, v in d.items()}
+
 
 class LyricsDataset(MetaDataset):
     def __init__(self, path, metadata_mapping_path, **kwargs):
+        crop_args, kwargs = groupby("cro", kwargs, keep_prefix=True)
         super().__init__(path=path, metadata_mapping_path=metadata_mapping_path, **kwargs)
+        self.sample_rate = select("sample_rate", **kwargs)
+        self.crop_size = select('crop', **crop_args)
+        self.time_range = self.crop_size / self.sample_rate
         self.wavs = get_all_wav_filenames(path, recursive=False)
 
     def __len__(self) -> int:
         return super().__len__()
 
     def __getitem__(self, idx):
-        print(f"Here: {self.wavs[idx]}")
-        lyrics = File(self.wavs[idx]).get('lyrics', "")
         audio, artist, genre = super().__getitem__(idx)
-        return audio, artist, genre, lyrics
+        lyrics = File(self.wavs[idx]).get('lyrics', [""])[0]
+        pattern = r"(?<=\[\d\d\:\d\d\.\d\d\d\])|(?<=\[\d\d\:\d\d\.\d\d\])"
+        start = np.random.randint(0, audio.shape[-1] - self.crop_size)
+        end = start + self.crop_size
+        if audio.shape[-1] < self.crop_size:
+            start = 0
+            end = audio.shape[-1]
+        start_t = datetime.utcfromtimestamp(start / self.sample_rate).time()
+        end_t = datetime.utcfromtimestamp(end / self.sample_rate).time()
+        print(start_t, end_t)
+        time_lyrics = "\n".join(
+            map(lambda t: t[1],    
+                filter(lambda t : len(t) == 2 and  
+                       (start_t <= datetime.strptime(t[0].strip("[]"), "%M:%S.%f").time() <= end_t or isclose_datetime(datetime.strptime(t[0].strip("[]"), "%M:%S.%f").time(), start_t)), 
+                        map(lambda line : tuple(re.split(pattern, line, maxsplit=1)), lyrics.split("\n")))))
+        return audio[:,start:end], artist, genre, time_lyrics
         
 
         
 
-def get_dataset(path, metadata_mapping_path, sample_rate=48000, crop_size=2**20, random_crop_size=None, loudness=None, scale=None, stereo=True, mono=False):
+def get_dataset(path, metadata_mapping_path, sample_rate=48000, crop=2**20, loudness=None, scale=None, stereo=True, mono=False):
     transforms = AllTransform(
         source_rate = None,
         target_rate = None,
-        crop_size = crop_size,
+        crop_size = None,
         random_crop_size = None,
         loudness = loudness,
         scale = scale,
@@ -46,7 +106,8 @@ def get_dataset(path, metadata_mapping_path, sample_rate=48000, crop_size=2**20,
         #**kwargs Forwarded to `MetaDataset`
         recursive = False, # Recursively load files from provided paths
         sample_rate = sample_rate, # Specify sample rate to convert files to on read
-        random_crop_size = random_crop_size, # Load small portions of files randomly
+        crop=crop,
+        #random_crop_size = None, # Load small portions of files randomly
         transforms = transforms, # Transforms to apply to audio files
         check_silence = True # Discards silent samples if true
     )
@@ -54,7 +115,8 @@ def get_dataset(path, metadata_mapping_path, sample_rate=48000, crop_size=2**20,
 
 
 if __name__ == "__main__":
-    dataset = get_dataset(path="/Users/gio/spotdl/", metadata_mapping_path="/Users/gio/spotdl/meta")
+    dataset = get_dataset("/Users/gio/spotdl/", metadata_mapping_path="/Users/gio/spotdl/meta", crop=2**20)
     for audio, artist, genre, lyrics in dataset:
         print(audio, artist, genre, lyrics)
-        print(audio.shape)
+        sd.play(audio[0,:].numpy(), 48000)
+        sd.wait()  # Wait until the audio has finished playing
