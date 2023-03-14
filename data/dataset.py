@@ -7,7 +7,7 @@ import numpy as np
 from typing import Callable, Dict, List, Optional, Sequence, Tuple, TypeVar, Union
 import sounddevice as sd
 
-
+# TODO: add linear lyrics break
 
 def exists(val):
     return val is not None
