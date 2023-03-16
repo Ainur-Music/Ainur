@@ -7,27 +7,12 @@ import numpy as np
 from typing import Callable, Dict, List, Optional, Sequence, Tuple, TypeVar, Union
 import sounddevice as sd
 
-# TODO: add linear lyrics break
 
 def exists(val):
     return val is not None
 
 def default(val, d):
     return val if exists(val) else d
-
-def isclose_datetime(t1, t2, rel_tol=0, abs_tol=1.0):
-
-    # combine each time object with a date to create a datetime object
-    dt1 = datetime.combine(datetime.today(), t1)
-    dt2 = datetime.combine(datetime.today(), t2)
-    # Calculate the difference between the two datetimes
-    diff = abs((dt1 - dt2).total_seconds())
-    
-    # Calculate the maximum allowed difference based on the relative and absolute tolerances
-    max_diff = max(rel_tol * diff, abs_tol)
-    
-    # Check if the difference is within the maximum allowed difference
-    return diff <= max_diff
 
 def select(key, **kwargs):
     value = kwargs.get(key, None)
@@ -51,6 +36,28 @@ def groupby(prefix: str, d: Dict, keep_prefix: bool = False) -> Tuple[Dict, Dict
 
 def prefix_dict(prefix: str, d: Dict) -> Dict:
     return {prefix + str(k): v for k, v in d.items()}
+
+def isclose_datetime(t1, t2, rel_tol=0, abs_tol=1.0):
+
+    # combine each time object with a date to create a datetime object
+    dt1 = datetime.combine(datetime.today(), t1)
+    dt2 = datetime.combine(datetime.today(), t2)
+    # Calculate the difference between the two datetimes
+    diff = abs((dt1 - dt2).total_seconds())
+    
+    # Calculate the maximum allowed difference based on the relative and absolute tolerances
+    max_diff = max(rel_tol * diff, abs_tol)
+    
+    # Check if the difference is within the maximum allowed difference
+    return diff <= max_diff
+
+def is_in_time_range(time, start_t, end_t, abs_tol=1.0):
+    t = time[0].strip("[]")
+    if int(t.split(":")[0]) < 60:
+        return (start_t <= datetime.strptime(t, "%M:%S.%f").time() <= end_t or
+                 isclose_datetime(datetime.strptime(t, "%M:%S.%f").time(), start_t, abs_tol=abs_tol))
+    else:
+        return False
 
 
 class LyricsDataset(MetaDataset):
@@ -76,12 +83,13 @@ class LyricsDataset(MetaDataset):
             end = audio.shape[-1]
         start_t = datetime.utcfromtimestamp(start / self.sample_rate).time()
         end_t = datetime.utcfromtimestamp(end / self.sample_rate).time()
-        print(start_t, end_t)
         time_lyrics = "\n".join(
             map(lambda t: t[1],    
-                filter(lambda t : len(t) == 2 and  
-                       (start_t <= datetime.strptime(t[0].strip("[]"), "%M:%S.%f").time() <= end_t or isclose_datetime(datetime.strptime(t[0].strip("[]"), "%M:%S.%f").time(), start_t)), 
-                        map(lambda line : tuple(re.split(pattern, line, maxsplit=1)), lyrics.split("\n")))))
+                filter(lambda t : len(t) == 2 and is_in_time_range(t, start_t, end_t), 
+                        map(lambda line : tuple(re.split(pattern, line, maxsplit=1)), lyrics.split("\n"))
+                    )
+                )
+            )
         return audio[:,start:end], artist, genre, time_lyrics
         
 
