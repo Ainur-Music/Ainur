@@ -6,6 +6,7 @@ from datetime import datetime
 import numpy as np
 from typing import Callable, Dict, List, Optional, Sequence, Tuple, TypeVar, Union
 import sounddevice as sd
+from torchvision.transforms import ToPILImage
 
 
 def exists(val):
@@ -61,11 +62,11 @@ def is_in_time_range(time, start_t, end_t, abs_tol=1.0):
 
 
 class LyricsDataset(MetaDataset):
-    def __init__(self, path, metadata_mapping_path, **kwargs):
-        crop_args, kwargs = groupby("cro", kwargs, keep_prefix=True)
-        super().__init__(path=path, metadata_mapping_path=metadata_mapping_path, **kwargs)
-        self.sample_rate = select("sample_rate", **kwargs)
-        self.crop_size = select('crop', **crop_args)
+    def __init__(self, path, **kwargs):
+        wav_kwargs, kwargs  = groupby("wav_", kwargs)
+        super().__init__(path=path, metadata_mapping_path=None, **wav_kwargs)
+        self.sample_rate = select("sample_rate", **wav_kwargs)
+        self.crop_size = select('crop', **kwargs)
         self.time_range = self.crop_size / self.sample_rate
         self.wavs = get_all_wav_filenames(path, recursive=False)
 
@@ -95,35 +96,34 @@ class LyricsDataset(MetaDataset):
 
         
 
-def get_dataset(path, metadata_mapping_path, sample_rate=48000, crop=2**20, loudness=None, scale=None, stereo=True, mono=False):
-    transforms = AllTransform(
+def get_dataset(path, sample_rate=48000, crop=2**20, wav_loudness=None, wav_scale=None, wav_stereo=True, wav_mono=False):
+    wav_transforms = AllTransform(
         source_rate = None,
         target_rate = None,
         crop_size = None,
         random_crop_size = None,
-        loudness = loudness,
-        scale = scale,
-        mono = mono,
-        stereo = stereo,
+        loudness = wav_loudness,
+        scale = wav_scale,
+        mono = wav_mono,
+        stereo = wav_stereo,
     )
+    
 
 
     return LyricsDataset(
         path = [path], # Path or list of paths from which to load files
-        metadata_mapping_path = None,
+        crop = crop,
         #**kwargs Forwarded to `MetaDataset`
-        recursive = False, # Recursively load files from provided paths
-        sample_rate = sample_rate, # Specify sample rate to convert files to on read
-        crop=crop,
-        #random_crop_size = None, # Load small portions of files randomly
-        transforms = transforms, # Transforms to apply to audio files
-        check_silence = True # Discards silent samples if true
+        wav_recursive = False, # Recursively load files from provided paths
+        wav_sample_rate = sample_rate, # Specify sample rate to convert files to on read
+        wav_transforms = wav_transforms, # Transforms to apply to audio files
+        wav_check_silence = True # Discards silent samples if true
     )
 
 
 
 if __name__ == "__main__":
-    dataset = get_dataset("/Users/gio/spotdl/", metadata_mapping_path="/Users/gio/spotdl/meta", crop=2**20)
+    dataset = get_dataset("/Users/gio/spotdl/", crop=2**20, wav_mono=True, wav_stereo=False)
     for audio, artist, genre, lyrics in dataset:
         print(audio, artist, genre, lyrics)
         sd.play(audio[0,:].numpy(), 48000)
