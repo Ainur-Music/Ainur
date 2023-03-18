@@ -125,6 +125,6 @@ def get_dataset(path, sample_rate=48000, crop=2**20, wav_loudness=None, wav_scal
 if __name__ == "__main__":
     dataset = get_dataset("/Users/gio/spotdl/", crop=2**20, wav_mono=True, wav_stereo=False)
     for audio, artist, genre, lyrics in dataset:
-        print(audio, artist, genre, lyrics)
-        sd.play(audio[0,:].numpy(), 48000)
-        sd.wait()  # Wait until the audio has finished playing
+        print(lyrics)
+        #sd.play(audio[0,:].numpy(), 48000)
+        #sd.wait()  # Wait until the audio has finished playing

@@ -1,10 +1,18 @@
+import comet_ml
+from lightning.pytorch.loggers.comet import CometLogger
+import lightning as L
 import torch
 import torch.nn.functional as F
-from torchvision.transforms import ToPILImage
-from transformers import CLIPProcessor, CLIPModel, CLIPConfig
-from torch import Tensor, nn
-from torchaudio import transforms as T
+from comet_ml import Experiment
 from einops import pack, rearrange, unpack
+from lightning import Trainer
+from torch import Tensor, nn
+from torch.utils.data import DataLoader
+from torchaudio import transforms as T
+from transformers import CLIPConfig, CLIPModel, CLIPImageProcessor, CLIPTokenizer
+
+from data.dataset import get_dataset
+
 
 class MelSpectrogram(nn.Module):
     def __init__(
@@ -57,23 +65,30 @@ class MelSpectrogram(nn.Module):
         return unpack(mel_spectrogram, ps, "* f l")[0]
 
 
-class CLIP(nn.Module):
-    def __init__(self, max_length=512):
+class CLIP(L.LightningModule):
+    def __init__(self, max_length=512, crop=2**20, batch_size=256, dataset_path=None):
         super(CLIP, self).__init__()
         self.configuration = CLIPConfig()
         self.max_length = max_length
+        self.crop = crop
+        self.dataset_path = dataset_path
+        self.batch_size = batch_size
         self.configuration.text_config.max_position_embeddings = max_length
         self.model = CLIPModel(self.configuration)
-        self.processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+        self.processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-base-patch32")
+        self.tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-base-patch32")
         self.mel = MelSpectrogram()
 
-    def forward(self, audio, lyrics):
+    def training_step(self, batch, batch_idx):
         # Mel spectrogram and stack stereo channels
+        audio, *_, lyrics = batch
         images = rearrange(self.mel(audio), "b c f l -> b (c f) l")
         # Turn the spectrograms to RGB for transfer learning
         images = images.unsqueeze(1).repeat(1, 3, 1, 1)
 
-        inputs = self.processor(text=lyrics, images=images, return_tensors="pt", padding=True, max_length=self.max_length, truncation=True)
+        images_processed = self.processor(images=images, return_tensors="pt", padding=True, max_length=self.max_length, truncation=True)
+        lyrics_tokenized = self.tokenizer(text=lyrics, return_tensors="pt", padding=True, max_length=self.max_length, truncation=True)
+        inputs = {**images_processed, **lyrics_tokenized}
         outputs = self.model(**inputs)
 
         batch_size = images.shape[0]
@@ -81,16 +96,21 @@ class CLIP(nn.Module):
         loss_i = F.cross_entropy(outputs['logits_per_image'], labels) 
         loss_t = F.cross_entropy(outputs['logits_per_text'], labels)
         loss = (loss_i + loss_t)/2
-
+        self.log('train_loss/step', loss, on_step=True, prog_bar=True, batch_size=batch_size)
+        self.log('train_loss/epoch', loss, on_epoch=True, prog_bar=True, batch_size=batch_size)
         return loss
+
+    def configure_optimizers(self):
+        return torch.optim.AdamW(self.parameters(), lr=1e-4, betas=(0.95, 0.999), eps=1e-6, weight_decay=1e-3)
     
-    @torch.no_grad()
-    def encode_lyrics(self, lyrics):
+
+    #@torch.no_grad()
+    #def encode_lyrics(self, lyrics): ##TODO: review
         inputs = self.processor(text=lyrics, return_tensors="pt", padding=True, max_length=self.max_length, truncation=True) 
         lyrics_features = self.model.get_text_features(**inputs)
         return lyrics_features
 
-    def encode_audio(self, audio):
+    #def encode_audio(self, audio): ##TODO: review
         # Mel spectrogram and stack stereo channels
         images = rearrange(self.mel(audio), "b c f l -> b (c f) l")
         # Turn the spectrograms to RGB for transfer learning
@@ -99,20 +119,47 @@ class CLIP(nn.Module):
         inputs = self.processor(images=images, return_tensors="pt", padding=True, max_length=self.max_length, truncation=True)
         audio_features = self.model.get_image_features(**inputs)
         return audio_features
+    
+    def train_dataloader(self):
+        dataset = get_dataset(self.dataset_path, crop=self.crop)
+        train_loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
+        return train_loader
 
     
 if __name__ == "__main__":
-    lyrics = """
-    When I'm with you, I feel like myself 
-    No stranger, the shadow of somebody else 
-    When I feel you holdin' my hand 
-    I get touched, ain't this life grand?
+    from argparse import ArgumentParser
+    parser = ArgumentParser()
 
-    But the form of a life is long never-ending 
-    And the smell of your halo, I know 
-    And the smile of a knife is seldom befriending 
-    And the smell of tangelo, I know
-    """
-    clip = CLIP()
-    clip.encode_lyrics(lyrics)
+    # Trainer arguments
+    parser.add_argument("--n_devices", type=int, default=1)
+    parser.add_argument("--epochs", type=int, default=1000)
+    parser.add_argument("--accelerator", type=str, default='gpu')
+    parser.add_argument("--devices", type=int, default=-1)
+    parser.add_argument("--num_nodes", type=int, default=1)
+    parser.add_argument("--precision", type=str, default='16-mixed')
 
+
+
+    # Hyperparameters for the model
+    parser.add_argument("--dataset_path", type=str, default="/home/gconcialdi/spotdl/")
+    parser.add_argument("--max_length", type=int, default=512)
+    parser.add_argument("--crop", type=int, default=2**20)
+    parser.add_argument("--batch_size", type=int, default=256)
+
+
+
+    # Parse the user inputs and defaults (returns a argparse.Namespace)
+    args = parser.parse_args()
+    
+    logger = CometLogger(
+        api_key="9LmOAqSG4omncUN3QT42iQoqb",
+        project_name="ainur",
+        workspace="gio99c",
+        experiment_name="clip"
+        )
+
+
+    clip = CLIP(max_length=args.max_length, crop=args.crop, batch_size=args.batch_size, dataset_path=args.dataset_path)
+    trainer = Trainer(max_epochs=args.epochs, logger=logger, precision=args.precision, accelerator=args.accelerator, devices=args.n_devices, num_nodes=args.num_nodes)
+
+    trainer.fit(clip)
