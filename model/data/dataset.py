@@ -5,7 +5,7 @@ import regex as re
 from datetime import datetime
 import numpy as np
 from typing import Callable, Dict, List, Optional, Sequence, Tuple, TypeVar, Union
-
+import torch.nn.functional as F
 
 def exists(val):
     return val is not None
@@ -52,7 +52,8 @@ def isclose_datetime(t1, t2, rel_tol=0, abs_tol=1.0):
 
 def is_in_time_range(time, start_t, end_t, abs_tol=1.0):
     t = time[0].strip("[]")
-    if int(t.split(":")[0]) < 60:
+    if int(t.split(":")[0]) < 60 and 
+int(t.split(":")[0]) < 60:
         return (start_t <= datetime.strptime(t, "%M:%S.%f").time() <= end_t or
                  isclose_datetime(datetime.strptime(t, "%M:%S.%f").time(), start_t, abs_tol=abs_tol))
     else:
@@ -75,11 +76,14 @@ class LyricsDataset(MetaDataset):
         audio, artist, genre = super().__getitem__(idx)
         lyrics = File(self.wavs[idx]).get('lyrics', [""])[0]
         pattern = r"(?<=\[\d\d\:\d\d\.\d\d\d\])|(?<=\[\d\d\:\d\d\.\d\d\])"
-        start = np.random.randint(0, audio.shape[-1] - self.crop_size)
-        end = start + self.crop_size
         if audio.shape[-1] < self.crop_size:
             start = 0
-            end = audio.shape[-1]
+            audio = F.pad(audio, (0, self.crop_size - audio.shape[-1]))
+            end = self.crop_size
+        else:
+            start = np.random.randint(0, audio.shape[-1] - self.crop_size)
+            end = start + self.crop_size
+
         start_t = datetime.utcfromtimestamp(start / self.sample_rate).time()
         end_t = datetime.utcfromtimestamp(end / self.sample_rate).time()
         time_lyrics = "\n".join(
@@ -89,7 +93,8 @@ class LyricsDataset(MetaDataset):
                     )
                 )
             )
-        return audio[:,start:end], artist, genre, time_lyrics
+        item = audio[:,start:end], artist, genre, [time_lyrics]
+        return item
         
 
         
@@ -121,8 +126,8 @@ def get_dataset(path, sample_rate=48000, crop=2**20, wav_loudness=None, wav_scal
 
 
 if __name__ == "__main__":
-    dataset = get_dataset("/Users/gio/spotdl/", crop=2**20, wav_mono=True, wav_stereo=False)
+    dataset = get_dataset("/home/gconcialdi/spotdl/", crop=2**20, wav_mono=True, wav_stereo=False)
+    print(len(dataset))
     for audio, artist, genre, lyrics in dataset:
-        print(lyrics)
-        #sd.play(audio[0,:].numpy(), 48000)
-        #sd.wait()  # Wait until the audio has finished playing
+        print(audio.shape, artist, genre, lyrics)
+        break

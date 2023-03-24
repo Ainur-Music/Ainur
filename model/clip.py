@@ -78,21 +78,23 @@ class CLIP(L.LightningModule):
         self.processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-base-patch32")
         self.tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-base-patch32")
         self.mel = MelSpectrogram()
+       
 
     def training_step(self, batch, batch_idx):
         # Mel spectrogram and stack stereo channels
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         audio, *_, lyrics = batch
-        images = rearrange(self.mel(audio), "b c f l -> b (c f) l")
+        images = rearrange(self.mel(audio.to(device)), "b c f l -> b (c f) l")
         # Turn the spectrograms to RGB for transfer learning
-        images = images.unsqueeze(1).repeat(1, 3, 1, 1)
+        images = images.unsqueeze(1).repeat(1, 3, 1, 1).to(device)
 
-        images_processed = self.processor(images=images, return_tensors="pt", padding=True, max_length=self.max_length, truncation=True)
-        lyrics_tokenized = self.tokenizer(text=lyrics, return_tensors="pt", padding=True, max_length=self.max_length, truncation=True)
+        images_processed = self.processor(images=images, return_tensors="pt", padding=True, max_length=self.max_length, truncation=True).to(device)
+        lyrics_tokenized = self.tokenizer(text=lyrics, return_tensors="pt", padding=True, max_length=self.max_length, truncation=True).to(device)
         inputs = {**images_processed, **lyrics_tokenized}
         outputs = self.model(**inputs)
 
         batch_size = images.shape[0]
-        labels = torch.arange(batch_size)
+        labels = torch.arange(batch_size).to(device)
         loss_i = F.cross_entropy(outputs['logits_per_image'], labels) 
         loss_t = F.cross_entropy(outputs['logits_per_text'], labels)
         loss = (loss_i + loss_t)/2
@@ -122,7 +124,7 @@ class CLIP(L.LightningModule):
     
     def train_dataloader(self):
         dataset = get_dataset(self.dataset_path, crop=self.crop)
-        train_loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
+        train_loader = DataLoader(dataset, num_workers=args.num_workers, pin_memory=True, persistent_workers=True, batch_size=self.batch_size, shuffle=True)
         return train_loader
 
     
@@ -145,6 +147,7 @@ if __name__ == "__main__":
     parser.add_argument("--max_length", type=int, default=512)
     parser.add_argument("--crop", type=int, default=2**20)
     parser.add_argument("--batch_size", type=int, default=256)
+    parser.add_argument("--num_workers", type=int, default=32)
 
 
 
@@ -155,7 +158,8 @@ if __name__ == "__main__":
         api_key="9LmOAqSG4omncUN3QT42iQoqb",
         project_name="ainur",
         workspace="gio99c",
-        experiment_name="clip"
+        experiment_name="clip",
+        offline=False
         )
 
 
