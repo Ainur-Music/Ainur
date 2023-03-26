@@ -139,6 +139,8 @@ if __name__ == "__main__":
     parser.add_argument("--devices", type=int, default=-1)
     parser.add_argument("--num_nodes", type=int, default=1)
     parser.add_argument("--precision", type=str, default='16-mixed')
+    parser.add_argument("--checkpoint_path", type=str, default=None)
+    
 
 
 
@@ -164,6 +166,6 @@ if __name__ == "__main__":
 
 
     clip = CLIP(max_length=args.max_length, crop=args.crop, batch_size=args.batch_size, dataset_path=args.dataset_path)
-    trainer = Trainer(max_epochs=args.epochs, logger=logger, precision=args.precision, accelerator=args.accelerator, devices=args.n_devices, num_nodes=args.num_nodes)
+    trainer = Trainer(max_epochs=args.epochs, logger=logger, precision=args.precision, accelerator=args.accelerator, devices=args.n_devices, num_nodes=args.num_nodes, default_root_dir="/home/gconcialdi/ainur/runs/")
 
-    trainer.fit(clip)
+    trainer.fit(clip, ckpt_path=args.checkpoint_path)
