@@ -8,8 +8,8 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --output=job_name_%j.log
-#SBATCH --mem-per-cpu=25000M
-#SBATCH --cpus-per-task 8
+#SBATCH --mem-per-cpu=4096M
+#SBATCH --cpus-per-task 16
 
 # Clip training
-python ainur/model/clip.py --batch_size 16 --num_workers 8
+python model/clip.py --batch_size 64 --num_workers 16
