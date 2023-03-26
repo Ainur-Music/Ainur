@@ -68,6 +68,8 @@ class MelSpectrogram(nn.Module):
 class CLIP(L.LightningModule):
     def __init__(self, max_length=512, crop=2**20, batch_size=256, dataset_path=None):
         super(CLIP, self).__init__()
+        self.save_hyperparameters()
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.configuration = CLIPConfig()
         self.max_length = max_length
         self.crop = crop
@@ -82,24 +84,25 @@ class CLIP(L.LightningModule):
 
     def training_step(self, batch, batch_idx):
         # Mel spectrogram and stack stereo channels
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         audio, *_, lyrics = batch
-        images = rearrange(self.mel(audio.to(device)), "b c f l -> b (c f) l")
+        images = rearrange(self.mel(audio.to(self.device)), "b c f l -> b (c f) l")
         # Turn the spectrograms to RGB for transfer learning
-        images = images.unsqueeze(1).repeat(1, 3, 1, 1).to(device)
+        images = images.unsqueeze(1).repeat(1, 3, 1, 1).to(self.device)
 
-        images_processed = self.processor(images=images, return_tensors="pt", padding=True, max_length=self.max_length, truncation=True).to(device)
-        lyrics_tokenized = self.tokenizer(text=lyrics, return_tensors="pt", padding=True, max_length=self.max_length, truncation=True).to(device)
+        images_processed = self.processor(images=images, return_tensors="pt", padding=True, max_length=self.max_length, truncation=True).to(self.device)
+        lyrics_tokenized = self.tokenizer(text=lyrics, return_tensors="pt", padding=True, max_length=self.max_length, truncation=True).to(self.device)
         inputs = {**images_processed, **lyrics_tokenized}
         outputs = self.model(**inputs)
 
         batch_size = images.shape[0]
-        labels = torch.arange(batch_size).to(device)
+        labels = torch.arange(batch_size).to(self.device)
         loss_i = F.cross_entropy(outputs['logits_per_image'], labels) 
         loss_t = F.cross_entropy(outputs['logits_per_text'], labels)
         loss = (loss_i + loss_t)/2
-        self.log('train_loss/step', loss, on_step=True, prog_bar=True, batch_size=batch_size)
-        self.log('train_loss/epoch', loss, on_epoch=True, prog_bar=True, batch_size=batch_size)
+        self.log('loss_img', loss_i, on_epoch=True, prog_bar=True, batch_size=batch_size)
+        self.log('loss_txt', loss_t, on_epoch=True, prog_bar=True, batch_size=batch_size)
+        self.log('loss', loss, on_step=True, prog_bar=True, batch_size=batch_size)
+        self.log('loss', loss, on_epoch=True, prog_bar=True, batch_size=batch_size)
         return loss
 
     def configure_optimizers(self):
@@ -140,8 +143,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_nodes", type=int, default=1)
     parser.add_argument("--precision", type=str, default='16-mixed')
     parser.add_argument("--checkpoint_path", type=str, default=None)
-    
-
+    parser.add_argument("--default_root_dir", type=str, default="/home/gconcialdi/ainur/runs/")
 
 
     # Hyperparameters for the model
@@ -166,6 +168,6 @@ if __name__ == "__main__":
 
 
     clip = CLIP(max_length=args.max_length, crop=args.crop, batch_size=args.batch_size, dataset_path=args.dataset_path)
-    trainer = Trainer(max_epochs=args.epochs, logger=logger, precision=args.precision, accelerator=args.accelerator, devices=args.n_devices, num_nodes=args.num_nodes, default_root_dir="/home/gconcialdi/ainur/runs/")
+    trainer = Trainer(max_epochs=args.epochs, logger=logger, precision=args.precision, accelerator=args.accelerator, devices=args.n_devices, num_nodes=args.num_nodes, default_root_dir=args.default_root_dir)
 
     trainer.fit(clip, ckpt_path=args.checkpoint_path)
