@@ -6,6 +6,8 @@ from datetime import datetime
 import numpy as np
 from typing import Callable, Dict, List, Optional, Sequence, Tuple, TypeVar, Union
 import torch.nn.functional as F
+import unicodedata
+
 
 def exists(val):
     return val is not None
@@ -51,9 +53,8 @@ def isclose_datetime(t1, t2, rel_tol=0, abs_tol=1.0):
     return diff <= max_diff
 
 def is_in_time_range(time, start_t, end_t, abs_tol=1.0):
-    t = time[0].strip("[]")
-    if int(t.split(":")[0]) < 60 and 
-int(t.split(":")[0]) < 60:
+    t = time[0].strip("[ ]")
+    if int(t.split(":")[0]) < 60 and int(t.split(":")[1].split(".")[0]) < 60:
         return (start_t <= datetime.strptime(t, "%M:%S.%f").time() <= end_t or
                  isclose_datetime(datetime.strptime(t, "%M:%S.%f").time(), start_t, abs_tol=abs_tol))
     else:
@@ -74,7 +75,9 @@ class LyricsDataset(MetaDataset):
 
     def __getitem__(self, idx):
         audio, artist, genre = super().__getitem__(idx)
-        lyrics = File(self.wavs[idx]).get('lyrics', [""])[0]
+        artist = " ".join(artist)
+        genre = " ".join(genre)
+        lyrics =  unicodedata.normalize("NFKC", File(self.wavs[idx]).get('lyrics', [""])[0])
         pattern = r"(?<=\[\d\d\:\d\d\.\d\d\d\])|(?<=\[\d\d\:\d\d\.\d\d\])"
         if audio.shape[-1] < self.crop_size:
             start = 0
@@ -93,7 +96,7 @@ class LyricsDataset(MetaDataset):
                     )
                 )
             )
-        item = audio[:,start:end], artist, genre, [time_lyrics]
+        item = audio[:,start:end], artist, genre, time_lyrics
         return item
         
 
