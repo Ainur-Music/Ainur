@@ -72,7 +72,6 @@ class CLIP(L.LightningModule):
     def __init__(self, max_length=512, crop=2**20, batch_size=256, dataset_path=None):
         super(CLIP, self).__init__()
         self.save_hyperparameters()
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.configuration = CLIPConfig()
         self.max_length = max_length
         self.crop = crop
@@ -86,19 +85,20 @@ class CLIP(L.LightningModule):
        
 
     def training_step(self, batch, batch_idx):
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         # Mel spectrogram and stack stereo channels
         audio, *_, lyrics = batch
-        images = rearrange(self.mel(audio.to(self.device)), "b c f l -> b (c f) l")
+        images = rearrange(self.mel(audio.to(device)), "b c f l -> b (c f) l")
         # Turn the spectrograms to RGB for transfer learning
-        images = images.unsqueeze(1).repeat(1, 3, 1, 1).to(self.device)
+        images = images.unsqueeze(1).repeat(1, 3, 1, 1).to(device)
 
-        images_processed = self.processor(images=images, return_tensors="pt", padding=True, max_length=self.max_length, truncation=True).to(self.device)
-        lyrics_tokenized = self.tokenizer(text=lyrics, return_tensors="pt", padding=True, max_length=self.max_length, truncation=True).to(self.device)
+        images_processed = self.processor(images=images, return_tensors="pt", padding=True, max_length=self.max_length, truncation=True).to(device)
+        lyrics_tokenized = self.tokenizer(text=lyrics, return_tensors="pt", padding=True, max_length=self.max_length, truncation=True).to(device)
         inputs = {**images_processed, **lyrics_tokenized}
         outputs = self.model(**inputs)
 
         batch_size = images.shape[0]
-        labels = torch.arange(batch_size).to(self.device)
+        labels = torch.arange(batch_size).to(device)
         loss_i = F.cross_entropy(outputs['logits_per_image'], labels) 
         loss_t = F.cross_entropy(outputs['logits_per_text'], labels)
         loss = (loss_i + loss_t)/2
