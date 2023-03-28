@@ -16,6 +16,7 @@ from lightning.pytorch.callbacks import StochasticWeightAveraging
 
 from data.dataset import get_dataset
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class MelSpectrogram(nn.Module):
     def __init__(
@@ -85,9 +86,8 @@ class CLIP(L.LightningModule):
        
 
     def training_step(self, batch, batch_idx):
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        # Mel spectrogram and stack stereo channels
         audio, *_, lyrics = batch
+        # Mel spectrogram and stack stereo channels
         images = rearrange(self.mel(audio.to(device)), "b c f l -> b (c f) l")
         # Turn the spectrograms to RGB for transfer learning
         images = images.unsqueeze(1).repeat(1, 3, 1, 1).to(device)
@@ -110,26 +110,26 @@ class CLIP(L.LightningModule):
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters(), lr=1e-4, betas=(0.95, 0.999), eps=1e-6, weight_decay=1e-3)
     
-
     #@torch.no_grad()
-    #def encode_lyrics(self, lyrics): ##TODO: review
-        inputs = self.processor(text=lyrics, return_tensors="pt", padding=True, max_length=self.max_length, truncation=True) 
-        lyrics_features = self.model.get_text_features(**inputs)
+    def encode_lyrics(self, lyrics):
+        lyrics_tokenized = self.tokenizer(text=lyrics, return_tensors="pt", padding=True, max_length=self.max_length, truncation=True).to(device)
+        lyrics_features = self.model.get_text_features(**lyrics_tokenized).to(device)
         return lyrics_features
 
-    #def encode_audio(self, audio): ##TODO: review
+   #@torch.no_grad()
+    def encode_audio(self, audio):
         # Mel spectrogram and stack stereo channels
-        images = rearrange(self.mel(audio), "b c f l -> b (c f) l")
+        images = rearrange(self.mel(audio.to(device)), "b c f l -> b (c f) l")
         # Turn the spectrograms to RGB for transfer learning
-        images = images.unsqueeze(1).repeat(1, 3, 1, 1)
+        images = images.unsqueeze(1).repeat(1, 3, 1, 1).to(device)
 
-        inputs = self.processor(images=images, return_tensors="pt", padding=True, max_length=self.max_length, truncation=True)
-        audio_features = self.model.get_image_features(**inputs)
+        images_processed = self.processor(images=images, return_tensors="pt", padding=True, max_length=self.max_length, truncation=True).to(device)
+        audio_features = self.model.get_image_features(**images_processed).to(device)
         return audio_features
     
     def train_dataloader(self):
         dataset = get_dataset(self.dataset_path, crop=self.crop)
-        train_loader = DataLoader(dataset, num_workers=args.num_workers, pin_memory=True, persistent_workers=True, batch_size=self.batch_size, shuffle=True)
+        train_loader = DataLoader(dataset, num_workers=16, pin_memory=True, persistent_workers=True, batch_size=self.batch_size, shuffle=True)
         return train_loader
 
     
@@ -153,7 +153,7 @@ if __name__ == "__main__":
     parser.add_argument("--max_length", type=int, default=512)
     parser.add_argument("--crop", type=int, default=2**20)
     parser.add_argument("--batch_size", type=int, default=256)
-    parser.add_argument("--num_workers", type=int, default=32)
+    parser.add_argument("--num_workers", type=int, default=16)
 
 
 
