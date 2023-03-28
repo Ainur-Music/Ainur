@@ -77,6 +77,7 @@ class LyricsDataset(MetaDataset):
         audio, artist, genre = super().__getitem__(idx)
         artist = " ".join(artist)
         genre = " ".join(genre)
+        # Normalize unicode characters in lyrics
         lyrics =  unicodedata.normalize("NFKC", File(self.wavs[idx]).get('lyrics', [""])[0])
         pattern = r"(?<=\[\d\d\:\d\d\.\d\d\d\])|(?<=\[\d\d\:\d\d\.\d\d\])"
         if audio.shape[-1] < self.crop_size:
