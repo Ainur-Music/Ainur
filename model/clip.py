@@ -177,7 +177,7 @@ if __name__ == "__main__":
                       devices=args.n_devices,
                       num_nodes=args.num_nodes,
                       default_root_dir=args.default_root_dir,
-                      plugins=[SLURMEnvironment(requeue_signal=signal.SIGUSR1)],
+                      plugins=[SLURMEnvironment(requeue_signal=signal.SIGHUP)],
                       callbacks=[StochasticWeightAveraging(swa_lrs=1e-4)])
 
     trainer.fit(clip, ckpt_path=args.checkpoint_path)
