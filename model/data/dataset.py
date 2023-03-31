@@ -77,6 +77,7 @@ class LyricsDataset(MetaDataset):
         audio, artist, genre = super().__getitem__(idx)
         artist = " ".join(artist)
         genre = " ".join(genre)
+ 
         # Normalize unicode characters in lyrics
         lyrics =  unicodedata.normalize("NFKC", File(self.wavs[idx]).get('lyrics', [""])[0])
         pattern = r"(?<=\[\d\d\:\d\d\.\d\d\d\])|(?<=\[\d\d\:\d\d\.\d\d\])"
@@ -88,6 +89,17 @@ class LyricsDataset(MetaDataset):
             start = np.random.randint(0, audio.shape[-1] - self.crop_size)
             end = start + self.crop_size
 
+        # Compute the sequence position in the audio
+        seq_len = int(np.ceil(audio.shape[-1] / self.crop_size))
+        seq_pos = int(np.floor(start / self.crop_size))
+        seq = f"{seq_pos} of {seq_len}"
+
+        # Create the text for conditioning
+        sep = np.random.choice([" ", ",", "-", ".", "_"], p=[0.8, 0.10, 0.05, 0.025, 0.025], size=2)
+        subject = np.random.choice([artist, genre], replace=False, p=[0.75, 0.25], size=2)
+        text = f"{subject[0]}{sep[0]}{subject[1]}{sep[1]}{seq}"        
+
+        # Crop the lyrics in the timerange of the cropped song
         start_t = datetime.utcfromtimestamp(start / self.sample_rate).time()
         end_t = datetime.utcfromtimestamp(end / self.sample_rate).time()
         time_lyrics = "\n".join(
@@ -97,7 +109,7 @@ class LyricsDataset(MetaDataset):
                     )
                 )
             )
-        item = audio[:,start:end], artist, genre, time_lyrics
+        item = audio[:,start:end], text, time_lyrics
         return item
         
 
@@ -130,8 +142,6 @@ def get_dataset(path, sample_rate=48000, crop=2**20, wav_loudness=None, wav_scal
 
 
 if __name__ == "__main__":
-    dataset = get_dataset("/home/gconcialdi/spotdl/", crop=2**20, wav_mono=True, wav_stereo=False)
-    print(len(dataset))
-    for audio, artist, genre, lyrics in dataset:
-        print(audio.shape, artist, genre, lyrics)
-        break
+    dataset = get_dataset("/home/gconcialdi/spotdl/", crop=2**20)
+    for audio, text, lyrics in dataset:
+        print(audio.shape, text, lyrics)
