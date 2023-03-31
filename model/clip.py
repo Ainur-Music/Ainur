@@ -1,20 +1,23 @@
 import comet_ml
-from lightning.pytorch.loggers.comet import CometLogger
+import os
+import signal
+
 import lightning as L
 import torch
-import signal
 import torch.nn.functional as F
 from comet_ml import Experiment
+from data.dataset import get_dataset
 from einops import pack, rearrange, unpack
 from lightning import Trainer
+from lightning.pytorch.callbacks import (ModelCheckpoint,
+                                         StochasticWeightAveraging)
+from lightning.pytorch.loggers.comet import CometLogger
+from lightning.pytorch.plugins.environments import SLURMEnvironment
 from torch import Tensor, nn
 from torch.utils.data import DataLoader
 from torchaudio import transforms as T
-from transformers import CLIPConfig, CLIPModel, CLIPImageProcessor, CLIPTokenizer
-from lightning.pytorch.plugins.environments import SLURMEnvironment
-from lightning.pytorch.callbacks import StochasticWeightAveraging
-
-from data.dataset import get_dataset
+from transformers import (CLIPConfig, CLIPImageProcessor, CLIPModel,
+                          CLIPTokenizer)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -170,6 +173,8 @@ if __name__ == "__main__":
 
 
     clip = CLIP(max_length=args.max_length, crop=args.crop, batch_size=args.batch_size, dataset_path=args.dataset_path)
+
+    checkpoint_callback = ModelCheckpoint(dirpath=os.path.join(args.default_root_dir, "clip/checkpoints/"))
     trainer = Trainer(max_epochs=args.epochs,
                       logger=logger,
                       precision=args.precision,
@@ -178,6 +183,6 @@ if __name__ == "__main__":
                       num_nodes=args.num_nodes,
                       default_root_dir=args.default_root_dir,
                       plugins=[SLURMEnvironment(requeue_signal=signal.SIGHUP)],
-                      callbacks=[StochasticWeightAveraging(swa_lrs=1e-4)])
+                      callbacks=[StochasticWeightAveraging(swa_lrs=1e-4), checkpoint_callback])
 
     trainer.fit(clip, ckpt_path=args.checkpoint_path)
