@@ -47,9 +47,11 @@ class LitDAE(L.LightningModule):
         train_loader = DataLoader(self.dataset, num_workers=self.num_workers, pin_memory=True, persistent_workers=True, batch_size=self.batch_size, shuffle=True)
         return train_loader
     
+    @torch.no_grad()
     def encode(self, x):
         return self.autoencoder.encode(x)
     
+    @torch.no_grad()
     def decode(self, x, num_steps=10):
         return self.autoencoder.decode(x, num_steps=num_steps)
 

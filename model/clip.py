@@ -110,13 +110,13 @@ class CLIP(L.LightningModule):
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters(), lr=1e-4, betas=(0.95, 0.999), eps=1e-6, weight_decay=1e-3)
     
-    #@torch.no_grad()
+    @torch.no_grad()
     def encode_lyrics(self, lyrics):
         lyrics_tokenized = self.tokenizer(text=lyrics, return_tensors="pt", padding=True, max_length=self.max_length, truncation=True).to(device)
         lyrics_features = self.model.get_text_features(**lyrics_tokenized).to(device)
         return lyrics_features
 
-   #@torch.no_grad()
+    @torch.no_grad()
     def encode_audio(self, audio):
         # Mel spectrogram and stack stereo channels
         images = rearrange(self.mel(audio.to(device)), "b c f l -> b (c f) l")
