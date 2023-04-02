@@ -172,7 +172,7 @@ def get_dataset(path, background=False, evaluation=False, sample_rate=48000, cro
     return LyricsDataset(
         path = [path], # Path or list of paths from which to load files
         crop = crop,
-        all=background,
+        all=not(background),
         #**kwargs Forwarded to `MetaDataset`
         wav_recursive = False, # Recursively load files from provided paths
         wav_sample_rate = sample_rate, # Specify sample rate to convert files to on read
