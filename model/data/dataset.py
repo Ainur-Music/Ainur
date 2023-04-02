@@ -1,12 +1,14 @@
-from audio_data_pytorch import MetaDataset, WAVDataset, AllTransform
-from audio_data_pytorch.datasets.wav_dataset import get_all_wav_filenames
-from mutagen import File
-import regex as re
-from datetime import datetime
-import numpy as np
-from typing import Callable, Dict, List, Optional, Sequence, Tuple, TypeVar, Union
-import torch.nn.functional as F
+import os
 import unicodedata
+from datetime import datetime
+from typing import (Callable, Dict, List, Optional, Sequence, Tuple, TypeVar,
+                    Union)
+
+import numpy as np
+import regex as re
+import torch.nn.functional as F
+from audio_data_pytorch import AllTransform, MetaDataset, WAVDataset
+from mutagen import File
 
 
 def exists(val):
@@ -38,6 +40,42 @@ def groupby(prefix: str, d: Dict, keep_prefix: bool = False) -> Tuple[Dict, Dict
 def prefix_dict(prefix: str, d: Dict) -> Dict:
     return {prefix + str(k): v for k, v in d.items()}
 
+# Copied from ...
+def fast_scandir(path: str, exts: List[str], recursive: bool = False):
+    # Scan files recursively faster than glob
+    # From github.com/drscotthawley/aeiou/blob/main/aeiou/core.py
+    subfolders, files = [], []
+
+    try:  # hope to avoid 'permission denied' by this try
+        for f in os.scandir(path):
+            try:  # 'hope to avoid too many levels of symbolic links' error
+                if f.is_dir():
+                    subfolders.append(f.path)
+                elif f.is_file():
+                    if os.path.splitext(f.name)[1].lower() in exts:
+                        files.append(f.path)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    if recursive:
+        for path in list(subfolders):
+            sf, f = fast_scandir(path, exts, recursive=recursive)
+            subfolders.extend(sf)
+            files.extend(f)  # type: ignore
+
+    return subfolders, files
+
+# Adapted from ...
+def get_wav_filenames(paths: Sequence[str], recursive: bool, all: bool = True) -> List[str]:
+    extensions = [".wav", ".flac"]
+    filenames = []
+    for path in paths:
+        _, files = fast_scandir(path, extensions, recursive=recursive)
+        filenames.extend(files)
+    return filenames if all else filenames[:10_000]
+
 def isclose_datetime(t1, t2, rel_tol=0, abs_tol=1.0):
 
     # combine each time object with a date to create a datetime object
@@ -54,7 +92,7 @@ def isclose_datetime(t1, t2, rel_tol=0, abs_tol=1.0):
 
 def is_in_time_range(time, start_t, end_t, abs_tol=1.0):
     t = time[0].strip("[ ]")
-    if int(t.split(":")[0]) < 60 and int(t.split(":")[1].split(".")[0]) < 60:
+    if (0 <= int(t.split(":")[0]) < 60) and (0 <= int(t.split(":")[1].split(".")[0]) < 60):
         return (start_t <= datetime.strptime(t, "%M:%S.%f").time() <= end_t or
                  isclose_datetime(datetime.strptime(t, "%M:%S.%f").time(), start_t, abs_tol=abs_tol))
     else:
@@ -62,13 +100,13 @@ def is_in_time_range(time, start_t, end_t, abs_tol=1.0):
 
 
 class LyricsDataset(MetaDataset):
-    def __init__(self, path, **kwargs):
+    def __init__(self, path, all=True, **kwargs):
         wav_kwargs, kwargs  = groupby("wav_", kwargs)
         super().__init__(path=path, metadata_mapping_path=None, **wav_kwargs)
         self.sample_rate = select("sample_rate", **wav_kwargs)
         self.crop_size = select('crop', **kwargs)
         self.time_range = self.crop_size / self.sample_rate
-        self.wavs = get_all_wav_filenames(path, recursive=False)
+        self.wavs = get_wav_filenames(path, recursive=False, all=all)
 
     def __len__(self) -> int:
         return super().__len__()
@@ -115,7 +153,7 @@ class LyricsDataset(MetaDataset):
 
         
 
-def get_dataset(path, sample_rate=48000, crop=2**20, wav_loudness=None, wav_scale=None, wav_stereo=True, wav_mono=False):
+def get_dataset(path, background=False, evaluation=False, sample_rate=48000, crop=2**20, wav_loudness=None, wav_scale=None, wav_stereo=True, wav_mono=False):
     wav_transforms = AllTransform(
         source_rate = None,
         target_rate = None,
@@ -128,20 +166,25 @@ def get_dataset(path, sample_rate=48000, crop=2**20, wav_loudness=None, wav_scal
     )
     
 
-
+    if evaluation:
+        pass
+    
     return LyricsDataset(
         path = [path], # Path or list of paths from which to load files
         crop = crop,
+        all=background,
         #**kwargs Forwarded to `MetaDataset`
         wav_recursive = False, # Recursively load files from provided paths
         wav_sample_rate = sample_rate, # Specify sample rate to convert files to on read
         wav_transforms = wav_transforms, # Transforms to apply to audio files
         wav_check_silence = True # Discards silent samples if true
-    )
+        )
+    
 
 
 
 if __name__ == "__main__":
-    dataset = get_dataset("/home/gconcialdi/spotdl/", crop=2**20)
+    dataset = get_dataset("/Users/gio/spotdl/", crop=2**20)
+    #dataset = get_dataset("/home/gconcialdi/spotdl/", crop=2**20)
     for audio, text, lyrics in dataset:
         print(audio.shape, text, lyrics)
