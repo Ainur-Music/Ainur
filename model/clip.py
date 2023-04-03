@@ -73,7 +73,7 @@ class MelSpectrogram(nn.Module):
 
 
 class CLIP(L.LightningModule):
-    def __init__(self, max_length=512, crop=2**20, batch_size=64, dataset_path=None):
+    def __init__(self, max_length=512, crop=2**20, batch_size=256, dataset_path=None):
         super(CLIP, self).__init__()
         self.save_hyperparameters()
         self.configuration = CLIPConfig()
@@ -101,7 +101,12 @@ class CLIP(L.LightningModule):
         outputs = self.model(**inputs)
 
         batch_size = images.shape[0]
-        loss = outputs['loss']
+        labels = torch.arange(batch_size).to(device)
+        loss_i = F.cross_entropy(outputs['logits_per_image'], labels) 
+        loss_t = F.cross_entropy(outputs['logits_per_text'], labels)
+        loss = (loss_i + loss_t)/2
+        self.log('loss_img', loss_i, on_epoch=True, prog_bar=True, batch_size=batch_size)
+        self.log('loss_txt', loss_t, on_epoch=True, prog_bar=True, batch_size=batch_size)
         self.log('loss', loss, on_epoch=True, prog_bar=True, batch_size=batch_size)
         return loss
 
@@ -150,7 +155,7 @@ if __name__ == "__main__":
     parser.add_argument("--dataset_path", type=str, default="/home/gconcialdi/spotdl/")
     parser.add_argument("--max_length", type=int, default=512)
     parser.add_argument("--crop", type=int, default=2**20)
-    parser.add_argument("--batch_size", type=int, default=64)
+    parser.add_argument("--batch_size", type=int, default=256)
     parser.add_argument("--num_workers", type=int, default=16)
 
 
