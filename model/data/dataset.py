@@ -68,13 +68,13 @@ def fast_scandir(path: str, exts: List[str], recursive: bool = False):
     return subfolders, files
 
 # Adapted from ...
-def get_wav_filenames(paths: Sequence[str], recursive: bool, all: bool = True) -> List[str]:
+def get_wav_filenames(paths: Sequence[str], recursive: bool) -> List[str]:
     extensions = [".wav", ".flac"]
     filenames = []
     for path in paths:
         _, files = fast_scandir(path, extensions, recursive=recursive)
         filenames.extend(files)
-    return filenames if all else filenames[:10_000]
+    return filenames
 
 def isclose_datetime(t1, t2, rel_tol=0, abs_tol=1.0):
 
@@ -100,13 +100,13 @@ def is_in_time_range(time, start_t, end_t, abs_tol=1.0):
 
 
 class LyricsDataset(MetaDataset):
-    def __init__(self, path, all=True, **kwargs):
+    def __init__(self, path, **kwargs):
         wav_kwargs, kwargs  = groupby("wav_", kwargs)
         super().__init__(path=path, metadata_mapping_path=None, **wav_kwargs)
         self.sample_rate = select("sample_rate", **wav_kwargs)
         self.crop_size = select('crop', **kwargs)
         self.time_range = self.crop_size / self.sample_rate
-        self.wavs = get_wav_filenames(path, recursive=False, all=all)
+        self.wavs = get_wav_filenames(path, recursive=False)
 
     def __len__(self) -> int:
         return super().__len__()
@@ -153,7 +153,7 @@ class LyricsDataset(MetaDataset):
 
         
 
-def get_dataset(path, background=False, evaluation=False, sample_rate=48000, crop=2**20, wav_loudness=None, wav_scale=None, wav_stereo=True, wav_mono=False):
+def get_dataset(path, sample_rate=48000, crop=2**20, wav_loudness=None, wav_scale=None, wav_stereo=True, wav_mono=False):
     wav_transforms = AllTransform(
         source_rate = None,
         target_rate = None,
@@ -165,14 +165,9 @@ def get_dataset(path, background=False, evaluation=False, sample_rate=48000, cro
         stereo = wav_stereo,
     )
     
-
-    if evaluation:
-        pass
-    
     return LyricsDataset(
         path = [path], # Path or list of paths from which to load files
         crop = crop,
-        all=not(background),
         #**kwargs Forwarded to `MetaDataset`
         wav_recursive = False, # Recursively load files from provided paths
         wav_sample_rate = sample_rate, # Specify sample rate to convert files to on read

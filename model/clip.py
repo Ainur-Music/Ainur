@@ -73,7 +73,7 @@ class MelSpectrogram(nn.Module):
 
 
 class CLIP(L.LightningModule):
-    def __init__(self, max_length=512, crop=2**20, batch_size=256, dataset_path=None):
+    def __init__(self, max_length=512, crop=2**20, batch_size=256, dataset_path=None, num_workers=16):
         super(CLIP, self).__init__()
         self.save_hyperparameters()
         self.configuration = CLIPConfig()
@@ -81,6 +81,7 @@ class CLIP(L.LightningModule):
         self.crop = crop
         self.dataset_path = dataset_path
         self.batch_size = batch_size
+        self.num_workers = num_workers
         self.configuration.text_config.max_position_embeddings = max_length
         self.model = CLIPModel(self.configuration)
         self.processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-base-patch32")
@@ -132,7 +133,7 @@ class CLIP(L.LightningModule):
     
     def train_dataloader(self):
         dataset = get_dataset(self.dataset_path, crop=self.crop)
-        train_loader = DataLoader(dataset, num_workers=16, pin_memory=True, persistent_workers=True, batch_size=self.batch_size, shuffle=True)
+        train_loader = DataLoader(dataset, num_workers=self.num_workers, pin_memory=True, persistent_workers=True, batch_size=self.batch_size, shuffle=True)
         return train_loader
 
     
@@ -172,7 +173,7 @@ if __name__ == "__main__":
         )
 
 
-    clip = CLIP(max_length=args.max_length, crop=args.crop, batch_size=args.batch_size, dataset_path=args.dataset_path)
+    clip = CLIP(max_length=args.max_length, crop=args.crop, batch_size=args.batch_size, dataset_path=args.dataset_path, num_workers=args.num_workers)
 
     checkpoint_callback = ModelCheckpoint(dirpath=os.path.join(args.default_root_dir, "clip/checkpoints/"))
     trainer = Trainer(max_epochs=args.epochs,
