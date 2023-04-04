@@ -1,5 +1,4 @@
 *.pyc
 logs/2023_03_16-09_43_39-model_RN50-lr_0.0005-b_64-j_1-p_amp/out.log
 9951827ac1e54805ba719c88a2b1cf5c
-.tmp
 .DS_Store
