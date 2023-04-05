@@ -256,7 +256,7 @@ if __name__ == "__main__":
     parser.add_argument("--precision", type=str, default='16-mixed')
     #parser.add_argument("--precision", type=str, default='32')
     parser.add_argument("--checkpoint_path", type=str, default=None)
-    parser.add_argument("--clip_checkpoint_path", type=str, default="/Users/gio/Desktop/checkpoint.ckpt")
+    parser.add_argument("--clip_checkpoint_path", type=str, default="/home/gconcialdi/ainur/runs/clip/checkpoints/clip.ckpt")
     parser.add_argument("--default_root_dir", type=str, default="/home/gconcialdi/ainur/runs/")
     parser.add_argument("--check_val_every_n_epoch", type=int, default=10)
 
