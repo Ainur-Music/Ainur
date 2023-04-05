@@ -110,7 +110,7 @@ class Ainur(L.LightningModule):
         batch_size = audio.shape[0]
 
 
-        train_dataset , *_ = random_split(self.dataset, [0.98, 0.01, 0.01], torch.Generator().manual_seed(42))
+        train_dataset , *_ = random_split(self.dataset, [0.995, 0.0025, 0.0025], torch.Generator().manual_seed(42))
         background, _ = random_split(train_dataset, [0.1, 0.9], torch.Generator().manual_seed(42))
         background = map(lambda item : item[0], background)
 
@@ -155,7 +155,7 @@ class Ainur(L.LightningModule):
         batch_size = audio.shape[0]
 
 
-        train_dataset , *_ = random_split(self.dataset, [0.98, 0.01, 0.01], torch.Generator().manual_seed(42))
+        train_dataset , *_ = random_split(self.dataset, [0.995, 0.0025, 0.0025], torch.Generator().manual_seed(42))
         background, _ = random_split(train_dataset, [0.3, 0.7], torch.Generator().manual_seed(42))
         background = map(lambda item : item[0], background)
 
@@ -194,17 +194,17 @@ class Ainur(L.LightningModule):
         return torch.optim.AdamW(self.diffusion_model.parameters(), lr=1e-4, betas=(0.95, 0.999), eps=1e-6, weight_decay=1e-3)
     
     def test_dataloader(self):
-        *_, test_dataset = random_split(self.dataset, [0.98, 0.01, 0.01], torch.Generator().manual_seed(42))
+        *_, test_dataset = random_split(self.dataset, [0.995, 0.0025, 0.0025], torch.Generator().manual_seed(42))
         test_loader = DataLoader(test_dataset, num_workers=self.num_workers, pin_memory=True, persistent_workers=True, batch_size=len(test_dataset), shuffle=False)
         return test_loader
     
     def val_dataloader(self):
-        _, val_dataset, _ = random_split(self.dataset, [0.98, 0.01, 0.01], torch.Generator().manual_seed(42))
+        _, val_dataset, _ = random_split(self.dataset, [0.995, 0.0025, 0.0025], torch.Generator().manual_seed(42))
         val_loader = DataLoader(val_dataset, num_workers=self.num_workers, pin_memory=True, persistent_workers=True, batch_size=len(val_dataset), shuffle=False)
         return val_loader
     
     def train_dataloader(self):
-        train_dataset, *_ = random_split(self.dataset, [0.98, 0.01, 0.01], torch.Generator().manual_seed(42))
+        train_dataset, *_ = random_split(self.dataset, [0.995, 0.0025, 0.0025], torch.Generator().manual_seed(42))
         train_loader = DataLoader(train_dataset, num_workers=self.num_workers, pin_memory=True, persistent_workers=True, batch_size=self.batch_size, shuffle=True)
         return train_loader
     
