@@ -307,7 +307,9 @@ if __name__ == "__main__":
                       devices=args.n_devices,
                       num_nodes=args.num_nodes,
                       default_root_dir=args.default_root_dir,
+                      check_val_every_n_epoch=args.check_val_every_n_epoch,
+                      num_sanity_val_steps=-1,
                       plugins=[SLURMEnvironment(requeue_signal=signal.SIGUSR1)],
                       callbacks=[StochasticWeightAveraging(swa_lrs=1e-4), checkpoint_callback])
 
-    trainer.fit(ainur, ckpt_path=args.checkpoint_path, check_val_every_n_epoch=args.check_val_every_n_epoch, num_sanity_val_steps=-1)
+    trainer.fit(ainur, ckpt_path=args.checkpoint_path)
