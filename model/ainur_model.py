@@ -163,7 +163,7 @@ class Ainur(L.LightningModule):
             use_pca=False, 
             use_activation=False,
             background=background,
-            verbose=False)
+            verbose=True)
         
         with torch.no_grad():
             evaluation_lyrics = self.sample_audio(lyrics=lyrics, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).to(device)
