@@ -84,7 +84,7 @@ class Ainur(L.LightningModule):
         audio, text, lyrics = batch
         audio = audio.to(device)
         #latent = torch.cat((self.clip.encode_lyrics(lyrics).unsqueeze(1), self.clip.encode_audio(audio).unsqueeze(1)), dim=1) # b x 2 x 512
-        latent = self.clip.encode_audio(audio).unsqueeze(1).to(device) # b x 1 x 512
+        latent = self.clip.encode_lyrics(lyrics).unsqueeze(1).to(device) # b x 1 x 512
         channels = [None] * self.inject_depth + [latent]
         encoded_audio = self.autoencoder.encode(audio).to(device)
         
@@ -220,7 +220,7 @@ class Ainur(L.LightningModule):
         elif audio is not None:
             latent = self.clip.encode_audio(audio).unsqueeze(1).to(device) # conditioning on audio
         else:
-            latent = torch.zeros(n_samples, 1, 2**self.latent_factor).to(device) # no clip conditioning
+            latent = None # no clip conditioning
 
         # Create the noise tensor
         noise = torch.randn(n_samples, self.in_channels, self.sample_length // 2**self.latent_factor).to(device)
@@ -308,7 +308,7 @@ if __name__ == "__main__":
                       num_nodes=args.num_nodes,
                       default_root_dir=args.default_root_dir,
                       check_val_every_n_epoch=args.check_val_every_n_epoch,
-                      num_sanity_val_steps=-1,
+                      num_sanity_val_steps=0,
                       plugins=[SLURMEnvironment(requeue_signal=signal.SIGUSR1)],
                       callbacks=[StochasticWeightAveraging(swa_lrs=1e-4), checkpoint_callback])
 
