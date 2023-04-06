@@ -156,7 +156,7 @@ class Ainur(L.LightningModule):
 
 
         train_dataset , *_ = random_split(self.dataset, [0.995, 0.0025, 0.0025], torch.Generator().manual_seed(42))
-        background, _ = random_split(train_dataset, [0.3, 0.7], torch.Generator().manual_seed(42))
+        background, _ = random_split(train_dataset, [0.1, 0.9], torch.Generator().manual_seed(42))
         background = map(lambda item : item[0], background)
 
         frechet = FAD(

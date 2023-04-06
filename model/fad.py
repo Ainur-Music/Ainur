@@ -7,7 +7,6 @@ import torch
 from torch import nn
 from scipy import linalg
 from tqdm import tqdm
-import soundfile as sf
 import resampy
 
 SAMPLE_RATE = 16000
@@ -117,7 +116,7 @@ class FAD:
         if os.path.exists(save_path):
             return torch.load(save_path)
         
-        embds_background = self.get_embeddings([np.mean(resampy.resample(sample.detach().squeeze().cpu().numpy(), 48_000, SAMPLE_RATE), axis=0) for sample in background])
+        embds_background = self.get_embeddings([np.mean(resampy.resample(sample.detach().squeeze().cpu().numpy(), 48_000, SAMPLE_RATE), axis=0) for sample in tqdm(background)])
         if len(embds_background) == 0:
             print("[Frechet Audio Distance] background set dir is empty, exitting...")
             return -1
@@ -128,7 +127,7 @@ class FAD:
     
 
     def score(self, evaluation):
-        embds_eval = self.get_embeddings([np.mean(resampy.resample(sample.detach().cpu().numpy(), 48_000, SAMPLE_RATE), axis=0) for sample in evaluation])
+        embds_eval = self.get_embeddings([np.mean(resampy.resample(sample.detach().cpu().numpy(), 48_000, SAMPLE_RATE), axis=0) for sample in tqdm(evaluation)])
 
         if len(embds_eval) == 0:
             print("[Frechet Audio Distance] eval set dir is empty, exitting...")
