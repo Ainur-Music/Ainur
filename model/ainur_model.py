@@ -121,9 +121,9 @@ class Ainur(L.LightningModule):
             verbose=False)
         
         with torch.no_grad():
-            evaluation_lyrics = self.sample_audio(lyrics=lyrics, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).to(device)
-            evaluation_audio = self.sample_audio(audio=audio, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).to(device)
-            evaluation_noclip = self.sample_audio(n_samples=len(text), text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).to(device)
+            evaluation_lyrics = self.sample_audio(lyrics=lyrics, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
+            evaluation_audio = self.sample_audio(audio=audio, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
+            evaluation_noclip = self.sample_audio(n_samples=len(text), text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
             fad_lyrics = frechet.score(evaluation_lyrics)
             fad_audio = frechet.score(evaluation_audio)
             fad_noclip = frechet.score(evaluation_noclip)
@@ -166,9 +166,9 @@ class Ainur(L.LightningModule):
             verbose=True)
         
         with torch.no_grad():
-            evaluation_lyrics = self.sample_audio(lyrics=lyrics, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).to(device)
-            evaluation_audio = self.sample_audio(audio=audio, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).to(device)
-            evaluation_noclip = self.sample_audio(n_samples=len(text), text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).to(device)
+            evaluation_lyrics = self.sample_audio(lyrics=lyrics, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
+            evaluation_audio = self.sample_audio(audio=audio, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
+            evaluation_noclip = self.sample_audio(n_samples=len(text), text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
             fad_lyrics = frechet.score(evaluation_lyrics)
             fad_audio = frechet.score(evaluation_audio)
             fad_noclip = frechet.score(evaluation_noclip)
@@ -308,7 +308,7 @@ if __name__ == "__main__":
                       num_nodes=args.num_nodes,
                       default_root_dir=args.default_root_dir,
                       check_val_every_n_epoch=args.check_val_every_n_epoch,
-                      num_sanity_val_steps=0,
+                      num_sanity_val_steps=1,
                       plugins=[SLURMEnvironment(requeue_signal=signal.SIGUSR1)],
                       callbacks=[StochasticWeightAveraging(swa_lrs=1e-4), checkpoint_callback])
 
