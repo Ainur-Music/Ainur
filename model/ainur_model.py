@@ -36,7 +36,8 @@ class Ainur(L.LightningModule):
                  latent_factor=9, 
                  clip_checkpoint_path="/Users/gio/Desktop/checkpoint.ckpt",
                  num_steps=50,
-                 embedding_scale=5.0):
+                 embedding_scale=5.0,
+                 checkpoint_every_n_epoch=10):
         super(Ainur, self).__init__()
         self.save_hyperparameters()
         self.inject_depth = inject_depth
@@ -51,6 +52,7 @@ class Ainur(L.LightningModule):
         self.sample_length = sample_length
         self.num_steps = num_steps
         self.embedding_scale = embedding_scale
+        self.checkpoint_every_n_epoch = checkpoint_every_n_epoch
         self.clip = CLIP.load_from_checkpoint(clip_checkpoint_path)
         self.clip.eval()
         self.autoencoder = LitDAE(dataset_path)
@@ -102,47 +104,48 @@ class Ainur(L.LightningModule):
         return loss
     
     def validation_step(self, batch, batch_idx):
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        audio, text, lyrics = batch
-        audio = audio.to(device)
-        text = text
-        lyrics = lyrics
-        batch_size = audio.shape[0]
+        if (self.current_epoch + 1) % self.checkpoint_every_n_epoch == 0:
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            audio, text, lyrics = batch
+            audio = audio.to(device)
+            text = text
+            lyrics = lyrics
+            batch_size = audio.shape[0]
 
-        ## Alredy computed
-        # train_dataset , *_ = random_split(self.dataset, [0.98, 0.005, 0.015], torch.Generator().manual_seed(42))
-        # background, _ = random_split(train_dataset, [0.1, 0.9], torch.Generator().manual_seed(42))
-        # background = map(lambda item : item[0], background)
+            ## Alredy computed
+            # train_dataset , *_ = random_split(self.dataset, [0.98, 0.005, 0.015], torch.Generator().manual_seed(42))
+            # background, _ = random_split(train_dataset, [0.1, 0.9], torch.Generator().manual_seed(42))
+            # background = map(lambda item : item[0], background)
 
-        frechet = FAD(
-            use_pca=False, 
-            use_activation=False,
-            background=None, ## Alredy computed
-            verbose=False)
-        
-        with torch.no_grad():
-            evaluation_lyrics = self.sample_audio(lyrics=lyrics, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
-            evaluation_audio = self.sample_audio(audio=audio, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
-            evaluation_noclip = self.sample_audio(n_samples=len(text), text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
-            fad_lyrics = frechet.score(evaluation_lyrics)
-            fad_audio = frechet.score(evaluation_audio)
-            fad_noclip = frechet.score(evaluation_noclip)
-            self.log('FAD_lyrics', fad_lyrics, on_epoch=True, prog_bar=True, batch_size=batch_size)
-            self.log('FAD_audio', fad_audio, on_epoch=True, prog_bar=True, batch_size=batch_size)
-            self.log('FAD_noclip', fad_noclip, on_epoch=True, prog_bar=True, batch_size=batch_size)
+            frechet = FAD(
+                use_pca=False, 
+                use_activation=False,
+                background=None, ## Alredy computed
+                verbose=False)
+            
+            with torch.no_grad():
+                evaluation_lyrics = self.sample_audio(lyrics=lyrics, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
+                evaluation_audio = self.sample_audio(audio=audio, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
+                evaluation_noclip = self.sample_audio(n_samples=len(text), text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
+                fad_lyrics = frechet.score(evaluation_lyrics)
+                fad_audio = frechet.score(evaluation_audio)
+                fad_noclip = frechet.score(evaluation_noclip)
+                self.log('FAD_lyrics', fad_lyrics, on_epoch=True, prog_bar=True, batch_size=batch_size)
+                self.log('FAD_audio', fad_audio, on_epoch=True, prog_bar=True, batch_size=batch_size)
+                self.log('FAD_noclip', fad_noclip, on_epoch=True, prog_bar=True, batch_size=batch_size)
 
-            # Log audio 
-            tmp_dir = os.path.join(os.getcwd(), ".tmp")
-            if not os.path.exists(tmp_dir):
-                os.mkdir(tmp_dir)
-            torchaudio.save(os.path.join(tmp_dir, "original.wav"), audio[0].detach().cpu(), 48_000) 
-            torchaudio.save(os.path.join(tmp_dir, "sample_lyrics.wav"), evaluation_lyrics[0].detach().cpu(), 48_000)
-            torchaudio.save(os.path.join(tmp_dir, "sample_audio.wav"), evaluation_audio[0].detach().cpu(), 48_000)
-            torchaudio.save(os.path.join(tmp_dir, "sample_noclip.wav"), evaluation_noclip[0].detach().cpu(), 48_000)
-            self.logger.experiment.log_audio(os.path.join(tmp_dir, "original.wav"))
-            self.logger.experiment.log_audio(os.path.join(tmp_dir, "sample_lyrics.wav"))
-            self.logger.experiment.log_audio(os.path.join(tmp_dir, "sample_audio.wav"))
-            self.logger.experiment.log_audio(os.path.join(tmp_dir, "sample_noclip.wav"))
+                # Log audio 
+                tmp_dir = os.path.join(os.getcwd(), ".tmp")
+                if not os.path.exists(tmp_dir):
+                    os.mkdir(tmp_dir)
+                torchaudio.save(os.path.join(tmp_dir, "original.wav"), audio[0].detach().cpu(), 48_000) 
+                torchaudio.save(os.path.join(tmp_dir, "sample_lyrics.wav"), evaluation_lyrics[0].detach().cpu(), 48_000)
+                torchaudio.save(os.path.join(tmp_dir, "sample_audio.wav"), evaluation_audio[0].detach().cpu(), 48_000)
+                torchaudio.save(os.path.join(tmp_dir, "sample_noclip.wav"), evaluation_noclip[0].detach().cpu(), 48_000)
+                self.logger.experiment.log_audio(os.path.join(tmp_dir, "original.wav"))
+                self.logger.experiment.log_audio(os.path.join(tmp_dir, "sample_lyrics.wav"))
+                self.logger.experiment.log_audio(os.path.join(tmp_dir, "sample_audio.wav"))
+                self.logger.experiment.log_audio(os.path.join(tmp_dir, "sample_noclip.wav"))
 
 
 
@@ -258,7 +261,7 @@ if __name__ == "__main__":
     parser.add_argument("--checkpoint_path", type=str, default=None)
     parser.add_argument("--clip_checkpoint_path", type=str, default="/home/gconcialdi/ainur/runs/clip/checkpoints/clip.ckpt")
     parser.add_argument("--default_root_dir", type=str, default="/home/gconcialdi/ainur/runs/")
-    parser.add_argument("--check_val_every_n_epoch", type=int, default=10)
+    parser.add_argument("--checkpoint_every_n_epoch", type=int, default=10)
 
 
     # Hyperparameters for the model
@@ -296,10 +299,11 @@ if __name__ == "__main__":
                   clip_checkpoint_path=args.clip_checkpoint_path,
                   sample_length=args.sample_length,
                   num_steps=args.num_steps,
-                  embedding_scale=args.embedding_scale
+                  embedding_scale=args.embedding_scale,
+                  checkpoint_every_n_epoch=args.checkpoint_every_n_epoch
                   )
 
-    checkpoint_callback = ModelCheckpoint(dirpath=os.path.join(args.default_root_dir, "ainur_model/checkpoints/"), every_n_epochs=1, save_top_k=-1)
+    checkpoint_callback = ModelCheckpoint(dirpath=os.path.join(args.default_root_dir, "ainur_model/checkpoints/"))
     trainer = Trainer(max_epochs=args.epochs,
                       logger=logger,
                       precision=args.precision,
@@ -307,7 +311,6 @@ if __name__ == "__main__":
                       devices=args.n_devices,
                       num_nodes=args.num_nodes,
                       default_root_dir=args.default_root_dir,
-                      check_val_every_n_epoch=args.check_val_every_n_epoch,
                       num_sanity_val_steps=0,
                       plugins=[SLURMEnvironment(requeue_signal=signal.SIGUSR1)],
                       callbacks=[StochasticWeightAveraging(swa_lrs=1e-4), checkpoint_callback])
