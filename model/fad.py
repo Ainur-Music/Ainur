@@ -2,20 +2,24 @@
 Adapted from https://github.com/gudgud96/frechet-audio-distance
 """
 import os
+
 import numpy as np
-import torch
-from torch import nn
-from scipy import linalg
-from tqdm import tqdm
 import resampy
+import torch
+import torchmetrics
+from scipy import linalg
+from torch import nn
+from torchmetrics import Metric
+from tqdm import tqdm
 
 SAMPLE_RATE = 16000
 
-class FAD:
-    def __init__(self, use_pca=False, use_activation=False, background=None, verbose=False):
+class FAD(Metric):
+    def __init__(self, use_pca=False, use_activation=False, verbose=False):
         self.__get_model(use_pca=use_pca, use_activation=use_activation)
-        self.background = background
         self.verbose = verbose
+        self.add_state("embd_lst", dist_reduce_fx="cat")
+        self.add_state("background_statistics")
     
     def __get_model(self, use_pca=False, use_activation=False):
         """
@@ -111,49 +115,41 @@ class FAD:
                 + np.trace(sigma2) - 2 * tr_covmean)
     
     
-    def calculate_embd_statistics_background(self, background, save_path=".tmp/"):
+    def calculate_embd_statistics_background(self, background=None, save_path=".tmp/"):
         save_path = os.path.join(save_path, "background_statistics.ptc")
         if os.path.exists(save_path):
             return torch.load(save_path)
         
-        embds_background = self.get_embeddings([np.mean(resampy.resample(sample.detach().squeeze().cpu().numpy(), 48_000, SAMPLE_RATE), axis=0) for sample in tqdm(background)])
-        if len(embds_background) == 0:
-            print("[Frechet Audio Distance] background set dir is empty, exitting...")
-            return -1
-        
-        background_statistics = self.calculate_embd_statistics(embds_background)
-        torch.save(background_statistics, save_path)
-        return background_statistics
+        if background:
+            embds_background = self.get_embeddings([np.mean(resampy.resample(sample.detach().squeeze().cpu().numpy(), 48_000, SAMPLE_RATE), axis=0) for sample in tqdm(background)])
+            if len(embds_background) == 0:
+                print("[Frechet Audio Distance] background set dir is empty, exitting...")
+                return -1
+            
+            background_statistics = self.calculate_embd_statistics(embds_background)
+            torch.save(background_statistics, save_path)
+            return background_statistics
+        else:
+            print(f"Background statistics are not pre-computed in directory '{save_path}' and background is None.\nProvide a background dataset for computing the statistics.")
+            return None
     
 
-    def score(self, evaluation):
-        embds_eval = self.get_embeddings([np.mean(resampy.resample(sample.detach().cpu().numpy(), 48_000, SAMPLE_RATE), axis=0) for sample in tqdm(evaluation)])
+    def update(self, preds, target=None):
+        self.embds_lst = self.get_embeddings([np.mean(resampy.resample(sample.detach().cpu().numpy(), 48_000, SAMPLE_RATE), axis=0) for sample in tqdm(preds)])
 
-        if len(embds_eval) == 0:
+        if len(self.embds_lst) == 0:
             print("[Frechet Audio Distance] eval set dir is empty, exitting...")
             return -1
-        mu_background, sigma_background = self.calculate_embd_statistics_background(self.background)
-        mu_eval, sigma_eval = self.calculate_embd_statistics(embds_eval)
+        
+        self.background_statistics = self.calculate_embd_statistics_background(target)
 
-        fad_score = self.calculate_frechet_distance(
+    def compute(self):
+        mu_eval, sigma_eval = self.calculate_embd_statistics(self.embds_lst)
+        mu_background, sigma_background = self.background_statistics
+
+        return self.calculate_frechet_distance(
             mu_background, 
             sigma_background, 
             mu_eval, 
             sigma_eval
         )
-
-        return fad_score
-    
-
-
-if __name__ == "__main__":
-    background = torch.randn(2**18).numpy()
-    eval = torch.randn(2**18).numpy()
-
-    frechet = FAD(
-        use_pca=False, 
-        use_activation=False,
-        background=background,
-        verbose=False)
-
-    print(frechet.score(eval))
