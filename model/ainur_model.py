@@ -109,15 +109,15 @@ class Ainur(L.LightningModule):
         lyrics = lyrics
         batch_size = audio.shape[0]
 
-
-        train_dataset , *_ = random_split(self.dataset, [0.995, 0.0025, 0.0025], torch.Generator().manual_seed(42))
-        background, _ = random_split(train_dataset, [0.1, 0.9], torch.Generator().manual_seed(42))
-        background = map(lambda item : item[0], background)
+        ## Alredy computed
+        # train_dataset , *_ = random_split(self.dataset, [0.98, 0.005, 0.015], torch.Generator().manual_seed(42))
+        # background, _ = random_split(train_dataset, [0.1, 0.9], torch.Generator().manual_seed(42))
+        # background = map(lambda item : item[0], background)
 
         frechet = FAD(
             use_pca=False, 
             use_activation=False,
-            background=background,
+            background=None, ## Alredy computed
             verbose=False)
         
         with torch.no_grad():
@@ -155,7 +155,7 @@ class Ainur(L.LightningModule):
         batch_size = audio.shape[0]
 
 
-        train_dataset , *_ = random_split(self.dataset, [0.995, 0.0025, 0.0025], torch.Generator().manual_seed(42))
+        train_dataset , *_ = random_split(self.dataset, [0.98, 0.005, 0.015], torch.Generator().manual_seed(42))
         background, _ = random_split(train_dataset, [0.1, 0.9], torch.Generator().manual_seed(42))
         background = map(lambda item : item[0], background)
 
@@ -194,17 +194,17 @@ class Ainur(L.LightningModule):
         return torch.optim.AdamW(self.diffusion_model.parameters(), lr=1e-4, betas=(0.95, 0.999), eps=1e-6, weight_decay=1e-3)
     
     def test_dataloader(self):
-        *_, test_dataset = random_split(self.dataset, [0.995, 0.0025, 0.0025], torch.Generator().manual_seed(42))
-        test_loader = DataLoader(test_dataset, num_workers=self.num_workers, pin_memory=True, persistent_workers=True, batch_size=len(test_dataset), shuffle=False)
+        *_, test_dataset = random_split(self.dataset, [0.98, 0.005, 0.015], torch.Generator().manual_seed(42))
+        test_loader = DataLoader(test_dataset, num_workers=1, pin_memory=True, batch_size=len(test_dataset), shuffle=False)
         return test_loader
     
     def val_dataloader(self):
-        _, val_dataset, _ = random_split(self.dataset, [0.995, 0.0025, 0.0025], torch.Generator().manual_seed(42))
-        val_loader = DataLoader(val_dataset, num_workers=self.num_workers, pin_memory=True, persistent_workers=True, batch_size=len(val_dataset), shuffle=False)
+        _, val_dataset, _ = random_split(self.dataset, [0.98, 0.005, 0.015], torch.Generator().manual_seed(42))
+        val_loader = DataLoader(val_dataset, num_workers=1, pin_memory=True, batch_size=len(val_dataset), shuffle=False)
         return val_loader
     
     def train_dataloader(self):
-        train_dataset, *_ = random_split(self.dataset, [0.995, 0.0025, 0.0025], torch.Generator().manual_seed(42))
+        train_dataset, *_ = random_split(self.dataset, [0.98, 0.005, 0.015], torch.Generator().manual_seed(42))
         train_loader = DataLoader(train_dataset, num_workers=self.num_workers, pin_memory=True, persistent_workers=True, batch_size=self.batch_size, shuffle=True)
         return train_loader
     
@@ -299,7 +299,7 @@ if __name__ == "__main__":
                   embedding_scale=args.embedding_scale
                   )
 
-    checkpoint_callback = ModelCheckpoint(dirpath=os.path.join(args.default_root_dir, "ainur_model/checkpoints/"), every_n_epochs=1)
+    checkpoint_callback = ModelCheckpoint(dirpath=os.path.join(args.default_root_dir, "ainur_model/checkpoints/"), every_n_epochs=1, save_top_k=-1)
     trainer = Trainer(max_epochs=args.epochs,
                       logger=logger,
                       precision=args.precision,
@@ -308,7 +308,7 @@ if __name__ == "__main__":
                       num_nodes=args.num_nodes,
                       default_root_dir=args.default_root_dir,
                       check_val_every_n_epoch=args.check_val_every_n_epoch,
-                      num_sanity_val_steps=1,
+                      num_sanity_val_steps=0,
                       plugins=[SLURMEnvironment(requeue_signal=signal.SIGUSR1)],
                       callbacks=[StochasticWeightAveraging(swa_lrs=1e-4), checkpoint_callback])
 
