@@ -220,7 +220,7 @@ class Ainur(L.LightningModule):
         elif audio is not None:
             latent = self.clip.encode_audio(audio).unsqueeze(1).to(device) # conditioning on audio
         else:
-            latent = None # no clip conditioning
+            latent = torch.zeros(n_samples, 1, 2**self.latent_factor).to(device)  # no clip conditioning
 
         # Create the noise tensor
         noise = torch.randn(n_samples, self.in_channels, self.sample_length // 2**self.latent_factor).to(device)
