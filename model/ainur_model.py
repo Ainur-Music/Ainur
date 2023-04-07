@@ -124,6 +124,7 @@ class Ainur(L.LightningModule):
                 verbose=False)
             
             with torch.no_grad():
+                torch.cuda.empty_cache()
                 evaluation_lyrics = self.sample_audio(lyrics=lyrics, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
                 evaluation_audio = self.sample_audio(audio=audio, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
                 evaluation_noclip = self.sample_audio(n_samples=len(text), text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
@@ -169,6 +170,7 @@ class Ainur(L.LightningModule):
             verbose=True)
         
         with torch.no_grad():
+            torch.cuda.empty_cache()
             evaluation_lyrics = self.sample_audio(lyrics=lyrics, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
             evaluation_audio = self.sample_audio(audio=audio, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
             evaluation_noclip = self.sample_audio(n_samples=len(text), text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
