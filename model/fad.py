@@ -16,6 +16,7 @@ SAMPLE_RATE = 16000
 
 class FAD(Metric):
     def __init__(self, use_pca=False, use_activation=False, verbose=False):
+        super().__init__()
         self.__get_model(use_pca=use_pca, use_activation=use_activation)
         self.verbose = verbose
         self.add_state("embd_lst", dist_reduce_fx="cat")
