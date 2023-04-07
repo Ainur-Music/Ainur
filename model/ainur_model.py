@@ -105,12 +105,16 @@ class Ainur(L.LightningModule):
     
     def validation_step(self, batch, batch_idx):
         if (self.current_epoch + 1) % self.checkpoint_every_n_epoch == 0:
-            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
             audio, text, lyrics = batch
-            audio = audio.to(device)
+            audio = audio.cpu()
             text = text
             lyrics = lyrics
             batch_size = audio.shape[0]
+
+            # Create hidden tmp directory
+            tmp_dir = os.path.join(os.getcwd(), ".tmp")
+            if not os.path.exists(tmp_dir):
+                os.mkdir(tmp_dir)
 
             ## Alredy computed
             # train_dataset , *_ = random_split(self.dataset, [0.98, 0.005, 0.015], torch.Generator().manual_seed(42))
@@ -124,36 +128,21 @@ class Ainur(L.LightningModule):
                 verbose=False)
             
             with torch.no_grad():
-                torch.cuda.empty_cache()
-                evaluation_lyrics = self.sample_audio(lyrics=lyrics, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
-                evaluation_audio = self.sample_audio(audio=audio, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
-                evaluation_noclip = self.sample_audio(n_samples=len(text), text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
-                fad_lyrics = frechet.score(evaluation_lyrics)
-                fad_audio = frechet.score(evaluation_audio)
-                fad_noclip = frechet.score(evaluation_noclip)
-                self.log('FAD_lyrics', fad_lyrics, on_epoch=True, prog_bar=True, batch_size=batch_size)
-                self.log('FAD_audio', fad_audio, on_epoch=True, prog_bar=True, batch_size=batch_size)
-                self.log('FAD_noclip', fad_noclip, on_epoch=True, prog_bar=True, batch_size=batch_size)
-
-                # Log audio 
-                tmp_dir = os.path.join(os.getcwd(), ".tmp")
-                if not os.path.exists(tmp_dir):
-                    os.mkdir(tmp_dir)
+                # Log original audio 
                 torchaudio.save(os.path.join(tmp_dir, "original.wav"), audio[0].detach().cpu(), 48_000) 
-                torchaudio.save(os.path.join(tmp_dir, "sample_lyrics.wav"), evaluation_lyrics[0].detach().cpu(), 48_000)
-                torchaudio.save(os.path.join(tmp_dir, "sample_audio.wav"), evaluation_audio[0].detach().cpu(), 48_000)
-                torchaudio.save(os.path.join(tmp_dir, "sample_noclip.wav"), evaluation_noclip[0].detach().cpu(), 48_000)
                 self.logger.experiment.log_audio(os.path.join(tmp_dir, "original.wav"))
-                self.logger.experiment.log_audio(os.path.join(tmp_dir, "sample_lyrics.wav"))
-                self.logger.experiment.log_audio(os.path.join(tmp_dir, "sample_audio.wav"))
-                self.logger.experiment.log_audio(os.path.join(tmp_dir, "sample_noclip.wav"))
+
+                # Compute fad and log audio
+                self.evaluate(lyrics, text, frechet, mode='lyrics', batch_size=batch_size)
+                self.evaluate(audio, text, frechet, mode='audio', batch_size=batch_size)
+                self.evaluate(text, frechet, mode='noclip', batch_size=batch_size)
 
 
 
     def test_step(self, batch, batch_idx):
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        #device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         audio, text, lyrics = batch
-        audio = audio.to(device)
+        audio = audio.cpu()
         text = text
         lyrics = lyrics
         batch_size = audio.shape[0]
@@ -214,6 +203,23 @@ class Ainur(L.LightningModule):
         train_loader = DataLoader(train_dataset, num_workers=self.num_workers, pin_memory=True, persistent_workers=True, batch_size=self.batch_size, shuffle=True)
         return train_loader
     
+
+    @torch.no_grad()
+    def evaluate(self, latent, text, frechet, mode='lyrics', batch_size=16, test=False, tmp_dir=".tmp"):
+        if mode == 'lyrics':
+            evaluation = self.sample_audio(lyrics=latent, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
+        elif mode == 'audio':
+            evaluation = self.sample_audio(audio=latent, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
+        elif mode == 'noclip':
+            evaluation = self.sample_audio(n_samples=len(text), text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
+        else:
+            print(f"Unknown mode='{mode}', expected one of 'lyrics', 'audio', 'noclip'.")
+            return -1
+        fad = frechet.score(evaluation)
+        self.log(f'FAD_{mode}', fad, on_epoch=True, prog_bar=True, batch_size=batch_size)
+        torchaudio.save(os.path.join(tmp_dir, f"sample_{mode}{'_test' if test else ''}.wav"), evaluation[0].detach().cpu(), 48_000)
+        self.logger.experiment.log_audio(os.path.join(tmp_dir, f"sample_{mode}{'_test' if test else ''}.wav"))
+        del evaluation
 
     @torch.no_grad()
     def sample(self, lyrics=None, audio=None, n_samples=1, **kwargs):
