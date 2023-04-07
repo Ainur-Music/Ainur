@@ -299,7 +299,7 @@ if __name__ == "__main__":
                   embedding_scale=args.embedding_scale
                   )
 
-    checkpoint_callback = ModelCheckpoint(dirpath=os.path.join(args.default_root_dir, "ainur_model/checkpoints/"))
+    checkpoint_callback = ModelCheckpoint(dirpath=os.path.join(args.default_root_dir, "ainur_model/checkpoints/", every_n_epochs=1))
     trainer = Trainer(max_epochs=args.epochs,
                       logger=logger,
                       precision=args.precision,
