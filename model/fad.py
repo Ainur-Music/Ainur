@@ -18,7 +18,7 @@ class FAD(Metric):
         super().__init__()
         self.__get_model(use_pca=use_pca, use_activation=use_activation)
         self.verbose = verbose
-        self.add_state("embd_lst", [], dist_reduce_fx="cat")
+        self.add_state("embds_lst", [], dist_reduce_fx="cat")
         self.add_state("background_statistics", [])
     
     def __get_model(self, use_pca=False, use_activation=False):
