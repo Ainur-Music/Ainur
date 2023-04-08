@@ -107,7 +107,7 @@ class Ainur(L.LightningModule):
         return loss
     
     def validation_step(self, batch, batch_idx):
-        if (self.current_epoch + 1) % self.checkpoint_every_n_epoch == 0:
+        if self.current_epoch % self.checkpoint_every_n_epoch == 0:
             audio, text, lyrics = batch
             audio = audio.cpu()
             text = text
