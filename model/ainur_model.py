@@ -187,7 +187,7 @@ class Ainur(L.LightningModule):
         return test_loader
     
     def val_dataloader(self):
-        if (self.current_epoch + 1) % self.checkpoint_every_n_epoch == 0:
+        if self.current_epoch % self.checkpoint_every_n_epoch == 0:
             _, val_dataset, _ = random_split(self.dataset, [0.98, 0.005, 0.015], torch.Generator().manual_seed(42))
             val_loader = DataLoader(val_dataset, num_workers=0, pin_memory=True, persistent_workers=True, batch_size=self.batch_size, shuffle=False)
             return val_loader
@@ -317,7 +317,7 @@ if __name__ == "__main__":
                       devices=args.n_devices,
                       num_nodes=args.num_nodes,
                       default_root_dir=args.default_root_dir,
-                      num_sanity_val_steps=1,
+                      num_sanity_val_steps=-1,
                       plugins=[SLURMEnvironment(requeue_signal=signal.SIGUSR1)],
                       callbacks=[StochasticWeightAveraging(swa_lrs=1e-4), checkpoint_callback])
 
