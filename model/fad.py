@@ -6,6 +6,7 @@ import os
 import numpy as np
 import resampy
 import torch
+import torchmetrics
 from scipy import linalg
 from torch import nn
 from torchmetrics import Metric
@@ -141,7 +142,7 @@ class FAD(Metric):
             print("[Frechet Audio Distance] eval set dir is empty, exitting...")
             return -1
         
-        self.background_statistics = torch.cat(self.calculate_embd_statistics_background(target))
+        self.background_statistics = self.calculate_embd_statistics_background(target)
 
     def compute(self):
         mu_eval, sigma_eval = self.calculate_embd_statistics(self.embds_lst)
