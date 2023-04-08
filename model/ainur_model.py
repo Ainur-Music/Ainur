@@ -183,13 +183,13 @@ class Ainur(L.LightningModule):
     
     def test_dataloader(self):
         *_, test_dataset = random_split(self.dataset, [0.98, 0.005, 0.015], torch.Generator().manual_seed(42))
-        test_loader = DataLoader(test_dataset, num_workers=0, pin_memory=True, persistent_workers=True, batch_size=self.batch_size, shuffle=False)
+        test_loader = DataLoader(test_dataset, num_workers=0, pin_memory=True, batch_size=self.batch_size, shuffle=False)
         return test_loader
     
     def val_dataloader(self):
         if self.current_epoch % self.checkpoint_every_n_epoch == 0:
             _, val_dataset, _ = random_split(self.dataset, [0.98, 0.005, 0.015], torch.Generator().manual_seed(42))
-            val_loader = DataLoader(val_dataset, num_workers=0, pin_memory=True, persistent_workers=True, batch_size=self.batch_size, shuffle=False)
+            val_loader = DataLoader(val_dataset, num_workers=0, pin_memory=True, batch_size=self.batch_size, shuffle=False)
             return val_loader
     
     def train_dataloader(self):
