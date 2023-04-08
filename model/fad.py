@@ -135,14 +135,15 @@ class FAD(Metric):
     
 
     def update(self, preds, target=None):
-        self.embds_lst = self.get_embeddings([np.mean(resampy.resample(sample.detach().cpu().numpy(), 48_000, SAMPLE_RATE), axis=0) for sample in tqdm(preds)])
+        self.embds_lst.append(self.get_embeddings([np.mean(resampy.resample(sample.detach().cpu().numpy(), 48_000, SAMPLE_RATE), axis=0) for sample in tqdm(preds)]))
 
         if len(self.embds_lst) == 0:
             print("[Frechet Audio Distance] eval set dir is empty, exitting...")
             return -1
-        
-        self.background_statistics = torch.tensor(np.concatenate(self.calculate_embd_statistics_background(target)))
+        if self.background_statistics is None:
+            self.background_statistics = self.calculate_embd_statistics_background(target)
 
+            
     def compute(self):
         mu_eval, sigma_eval = self.calculate_embd_statistics(self.embds_lst)
         mu_background, sigma_background = self.background_statistics
