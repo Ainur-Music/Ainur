@@ -133,9 +133,9 @@ class Ainur(L.LightningModule):
                 self.logger.experiment.log_audio(os.path.join(tmp_dir, "original.wav"))
 
                 # Compute fad and log audio
-                self.evaluate(lyrics, text, mode='lyrics', background=background, batch_size=batch_size)
-                self.evaluate(audio, text, mode='audio', background=background, batch_size=batch_size)
-                self.evaluate(text, mode='noclip', background=background, batch_size=batch_size)
+                self.evaluate(lyrics, text, mode='lyrics', background=background)
+                self.evaluate(audio, text, mode='audio', background=background)
+                self.evaluate(text, mode='noclip', background=background)
 
     def on_validation_epoch_end(self):
         self.log("FAD_lyrics", self.frechet_lyrics.compute(), on_epoch=True, prog_bar=True)
