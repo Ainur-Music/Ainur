@@ -19,7 +19,7 @@ class FAD(Metric):
         self.__get_model(use_pca=use_pca, use_activation=use_activation)
         self.verbose = verbose
         self.add_state("embd_lst", [], dist_reduce_fx="cat")
-        self.add_state("background_statistics", torch.tensor(2))
+        self.add_state("background_statistics", [])
     
     def __get_model(self, use_pca=False, use_activation=False):
         """
@@ -56,7 +56,7 @@ class FAD(Metric):
             embd_lst = np.array(embd_lst)
         mu = np.mean(embd_lst, axis=0)
         sigma = np.cov(embd_lst, rowvar=False)
-        return mu, sigma
+        return [mu, sigma]
     
     def calculate_frechet_distance(self, mu1, sigma1, mu2, sigma2, eps=1e-6):
         """
