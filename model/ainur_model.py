@@ -137,7 +137,7 @@ class Ainur(L.LightningModule):
                 self.evaluate(audio, text, mode='audio', background=background, batch_size=batch_size)
                 self.evaluate(text, mode='noclip', background=background, batch_size=batch_size)
 
-    def validation_epoch_end(self, outputs):
+    def on_validation_epoch_end(self):
         self.log("FAD_lyrics", self.frechet_lyrics.compute(), on_epoch=True, prog_bar=True)
         self.log("FAD_audio", self.frechet_audio.compute(), on_epoch=True, prog_bar=True)
         self.log("FAD_noclip", self.frechet_noclip.compute(), on_epoch=True, prog_bar=True)
