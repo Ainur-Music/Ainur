@@ -128,8 +128,8 @@ class Ainur(L.LightningModule):
             
             with torch.no_grad():
                 # Log original audio 
-                torchaudio.save(os.path.join(tmp_dir, "original.wav"), audio[0].detach().cpu(), 48_000) 
-                self.logger.experiment.log_audio(os.path.join(tmp_dir, "original.wav"))
+                # torchaudio.save(os.path.join(tmp_dir, "original.wav"), audio[0].detach().cpu(), 48_000) 
+                # self.logger.experiment.log_audio(os.path.join(tmp_dir, "original.wav"))
 
                 # Compute fad and log audio
                 self.evaluate(text, lyrics, mode='lyrics', background=background)
