@@ -132,8 +132,8 @@ class Ainur(L.LightningModule):
                 self.logger.experiment.log_audio(os.path.join(tmp_dir, "original.wav"))
 
                 # Compute fad and log audio
-                self.evaluate(lyrics, text, mode='lyrics', background=background)
-                self.evaluate(audio, text, mode='audio', background=background)
+                self.evaluate(text, lyrics, mode='lyrics', background=background)
+                self.evaluate(text, audio, mode='audio', background=background)
                 self.evaluate(text, mode='noclip', background=background)
 
     def on_validation_epoch_end(self):
@@ -172,8 +172,8 @@ class Ainur(L.LightningModule):
             self.logger.experiment.log_audio(os.path.join(tmp_dir, "original.wav"))
 
             # Compute fad and log audio
-            self.evaluate(lyrics, text, mode='lyrics', background=background, batch_size=batch_size)
-            self.evaluate(audio, text, mode='audio', background=background, batch_size=batch_size)
+            self.evaluate(text, lyrics, mode='lyrics', background=background, batch_size=batch_size)
+            self.evaluate(text, audio, mode='audio', background=background, batch_size=batch_size)
             self.evaluate(text, mode='noclip', background=background, batch_size=batch_size)
 
 
@@ -198,14 +198,14 @@ class Ainur(L.LightningModule):
     
 
     @torch.no_grad()
-    def evaluate(self, latent, text, mode='lyrics', background=None, test=False, tmp_dir=".tmp"):
+    def evaluate(self, text, latent=None, mode='lyrics', background=None, test=False, tmp_dir=".tmp"):
         if mode == 'lyrics':
             evaluation = self.sample_audio(lyrics=latent, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
             self.frechet_lyrics(evaluation, target=background)
         elif mode == 'audio':
             evaluation = self.sample_audio(audio=latent, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
             self.frechet_audio(evaluation, target=background)
-        elif mode == 'noclip':
+        elif (latent is None) and (mode == 'noclip'):
             evaluation = self.sample_audio(n_samples=len(text), text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
             self.frechet_noclip(evaluation, target=background)
         else:
