@@ -53,9 +53,9 @@ class Ainur(L.LightningModule):
         self.num_steps = num_steps
         self.embedding_scale = embedding_scale
         self.checkpoint_every_n_epoch = checkpoint_every_n_epoch
-        self.frechet_lyrics = FAD(verbose=True)
-        self.frechet_audio = FAD(verbose=True)
-        self.frechet_noclip = FAD(verbose=True)
+        self.frechet_lyrics = FAD()
+        self.frechet_audio = FAD()
+        self.frechet_noclip = FAD()
         self.clip = CLIP.load_from_checkpoint(clip_checkpoint_path)
         self.clip.eval()
         self.autoencoder = LitDAE(dataset_path)
@@ -182,13 +182,13 @@ class Ainur(L.LightningModule):
     
     def test_dataloader(self):
         *_, test_dataset = random_split(self.dataset, [0.98, 0.005, 0.015], torch.Generator().manual_seed(42))
-        test_loader = DataLoader(test_dataset, num_workers=0, pin_memory=True, batch_size=self.batch_size, shuffle=False)
+        test_loader = DataLoader(test_dataset, num_workers=self.num_workers, pin_memory=True, persistent_workers=True, batch_size=self.batch_size, shuffle=False)
         return test_loader
     
     def val_dataloader(self):
         if self.current_epoch % self.checkpoint_every_n_epoch == 0:
             _, val_dataset, _ = random_split(self.dataset, [0.98, 0.005, 0.015], torch.Generator().manual_seed(42))
-            val_loader = DataLoader(val_dataset, num_workers=0, pin_memory=True, batch_size=self.batch_size, shuffle=False)
+            val_loader = DataLoader(val_dataset, num_workers=self.num_workers, pin_memory=True, persistent_workers=True, batch_size=self.batch_size, shuffle=False)
             return val_loader
     
     def train_dataloader(self):
@@ -258,30 +258,22 @@ if __name__ == "__main__":
     parser.add_argument("--n_devices", type=int, default=1)
     parser.add_argument("--epochs", type=int, default=1000)
     parser.add_argument("--accelerator", type=str, default='gpu')
-    # parser.add_argument("--accelerator", type=str, default='cpu')
     parser.add_argument("--devices", type=int, default=-1)
     parser.add_argument("--num_nodes", type=int, default=1)
     parser.add_argument("--precision", type=str, default='16-mixed')
-    # parser.add_argument("--precision", type=str, default='32')
     parser.add_argument("--checkpoint_path", type=str, default=None)
     parser.add_argument("--clip_checkpoint_path", type=str, default="/home/gconcialdi/ainur/runs/clip/checkpoints/clip.ckpt")
-    # parser.add_argument("--clip_checkpoint_path", type=str, default="/Users/gio/Desktop/clip.ckpt")
     parser.add_argument("--default_root_dir", type=str, default="/home/gconcialdi/ainur/runs/")
-    # parser.add_argument("--default_root_dir", type=str, default="/Users/gio/Desktop/ainur/runs/")
     parser.add_argument("--checkpoint_every_n_epoch", type=int, default=10)
 
 
     # Hyperparameters for the model
     parser.add_argument("--dataset_path", type=str, default="/home/gconcialdi/spotdl/")
-    # parser.add_argument("--dataset_path", type=str, default="/Users/gio/spotdl/")
     parser.add_argument("--max_length", type=int, default=512)
     parser.add_argument("--crop", type=int, default=2**20)
     parser.add_argument("--sample_length", type=int, default=2**20)
-    # parser.add_argument("--batch_size", type=int, default=3)
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--num_workers", type=int, default=16)
-    # parser.add_argument("--num_workers", type=int, default=12)
-    # parser.add_argument("--num_steps", type=int, default=1)
     parser.add_argument("--num_steps", type=int, default=50)
     parser.add_argument("--embedding_scale", type=float, default=7.0)
 
