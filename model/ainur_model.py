@@ -112,7 +112,6 @@ class Ainur(L.LightningModule):
             audio = audio.cpu()
             text = text
             lyrics = lyrics
-            batch_size = audio.shape[0]
 
             # Create hidden tmp directory
             tmp_dir = os.path.join(os.getcwd(), ".tmp")
@@ -259,28 +258,30 @@ if __name__ == "__main__":
     parser.add_argument("--n_devices", type=int, default=1)
     parser.add_argument("--epochs", type=int, default=1000)
     parser.add_argument("--accelerator", type=str, default='gpu')
-    #parser.add_argument("--accelerator", type=str, default='cpu')
+    # parser.add_argument("--accelerator", type=str, default='cpu')
     parser.add_argument("--devices", type=int, default=-1)
     parser.add_argument("--num_nodes", type=int, default=1)
     parser.add_argument("--precision", type=str, default='16-mixed')
-    #parser.add_argument("--precision", type=str, default='32')
+    # parser.add_argument("--precision", type=str, default='32')
     parser.add_argument("--checkpoint_path", type=str, default=None)
     parser.add_argument("--clip_checkpoint_path", type=str, default="/home/gconcialdi/ainur/runs/clip/checkpoints/clip.ckpt")
+    # parser.add_argument("--clip_checkpoint_path", type=str, default="/Users/gio/Desktop/clip.ckpt")
     parser.add_argument("--default_root_dir", type=str, default="/home/gconcialdi/ainur/runs/")
+    # parser.add_argument("--default_root_dir", type=str, default="/Users/gio/Desktop/ainur/runs/")
     parser.add_argument("--checkpoint_every_n_epoch", type=int, default=10)
 
 
     # Hyperparameters for the model
     parser.add_argument("--dataset_path", type=str, default="/home/gconcialdi/spotdl/")
-    #parser.add_argument("--dataset_path", type=str, default="/Users/gio/spotdl/")
+    # parser.add_argument("--dataset_path", type=str, default="/Users/gio/spotdl/")
     parser.add_argument("--max_length", type=int, default=512)
     parser.add_argument("--crop", type=int, default=2**20)
     parser.add_argument("--sample_length", type=int, default=2**20)
-    #parser.add_argument("--batch_size", type=int, default=2)
+    # parser.add_argument("--batch_size", type=int, default=3)
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--num_workers", type=int, default=16)
-    #parser.add_argument("--num_workers", type=int, default=1)
-    #parser.add_argument("--num_steps", type=int, default=1)
+    # parser.add_argument("--num_workers", type=int, default=12)
+    # parser.add_argument("--num_steps", type=int, default=1)
     parser.add_argument("--num_steps", type=int, default=50)
     parser.add_argument("--embedding_scale", type=float, default=7.0)
 

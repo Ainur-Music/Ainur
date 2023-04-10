@@ -19,7 +19,6 @@ class FAD(Metric):
         self.__get_model(use_pca=use_pca, use_activation=use_activation)
         self.verbose = verbose
         self.add_state("embds_lst", [], dist_reduce_fx="cat")
-        self.add_state("background_statistics", [])
     
     def __get_model(self, use_pca=False, use_activation=False):
         """
@@ -53,7 +52,7 @@ class FAD(Metric):
     
     def calculate_embd_statistics(self, embd_lst):
         if isinstance(embd_lst, list):
-            embd_lst = np.array(embd_lst)
+            embd_lst = np.array(embd_lst[0])
         mu = np.mean(embd_lst, axis=0)
         sigma = np.cov(embd_lst, rowvar=False)
         return [mu, sigma]
@@ -136,17 +135,16 @@ class FAD(Metric):
 
     def update(self, preds, target=None):
         self.embds_lst.append(self.get_embeddings([np.mean(resampy.resample(sample.detach().cpu().numpy(), 48_000, SAMPLE_RATE), axis=0) for sample in tqdm(preds)]))
-
+        self.target = target
         if len(self.embds_lst) == 0:
             print("[Frechet Audio Distance] eval set dir is empty, exitting...")
             return -1
-        if self.background_statistics is None:
-            self.background_statistics = self.calculate_embd_statistics_background(target)
+        
 
             
     def compute(self):
         mu_eval, sigma_eval = self.calculate_embd_statistics(self.embds_lst)
-        mu_background, sigma_background = self.background_statistics
+        mu_background, sigma_background = self.calculate_embd_statistics_background(self.target)
 
         return self.calculate_frechet_distance(
             mu_background, 
