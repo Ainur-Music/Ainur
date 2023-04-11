@@ -128,13 +128,13 @@ class Ainur(L.LightningModule):
             
             with torch.no_grad():
                 # Log original audio 
-                torchaudio.save(os.path.join(tmp_dir, "original.wav"), audio[0].detach().cpu(), 48_000) 
-                self.logger.experiment.log_audio(os.path.join(tmp_dir, "original.wav"))
+                torchaudio.save(os.path.join(tmp_dir, f"original_{batch_idx}.wav"), audio[0].detach().cpu(), 48_000) 
+                self.logger.experiment.log_audio(os.path.join(tmp_dir, f"original_{batch_idx}.wav"))
 
                 # Compute fad and log audio
-                self.evaluate(text, lyrics, mode='lyrics', background=background)
-                self.evaluate(text, audio, mode='audio', background=background)
-                self.evaluate(text, mode='noclip', background=background)
+                self.evaluate(text, lyrics, mode='lyrics', background=background, batch_idx=batch_idx)
+                self.evaluate(text, audio, mode='audio', background=background, batch_idx=batch_idx)
+                self.evaluate(text, mode='noclip', background=background, batch_idx=batch_idx)
 
     def on_validation_epoch_end(self):
         if self.current_epoch % self.checkpoint_every_n_epoch == 0:
@@ -169,13 +169,13 @@ class Ainur(L.LightningModule):
         
         with torch.no_grad():
             # Log original audio 
-            torchaudio.save(os.path.join(tmp_dir, "original.wav"), audio[0].detach().cpu(), 48_000) 
-            self.logger.experiment.log_audio(os.path.join(tmp_dir, "original.wav"))
+            torchaudio.save(os.path.join(tmp_dir, f"original_{batch_idx}.wav"), audio[0].detach().cpu(), 48_000) 
+            self.logger.experiment.log_audio(os.path.join(tmp_dir, f"original_{batch_idx}.wav"))
 
             # Compute fad and log audio
-            self.evaluate(text, lyrics, mode='lyrics', background=background, batch_size=batch_size)
-            self.evaluate(text, audio, mode='audio', background=background, batch_size=batch_size)
-            self.evaluate(text, mode='noclip', background=background, batch_size=batch_size)
+            self.evaluate(text, lyrics, mode='lyrics', background=background, batch_size=batch_size, batch_idx=batch_idx)
+            self.evaluate(text, audio, mode='audio', background=background, batch_size=batch_size, batch_idx=batch_idx)
+            self.evaluate(text, mode='noclip', background=background, batch_size=batch_size, batch_idx=batch_idx)
 
 
     def configure_optimizers(self):
@@ -199,7 +199,7 @@ class Ainur(L.LightningModule):
     
 
     @torch.no_grad()
-    def evaluate(self, text, latent=None, mode='lyrics', background=None, test=False, tmp_dir=".tmp"):
+    def evaluate(self, text, latent=None, mode='lyrics', background=None, test=False, tmp_dir=".tmp", batch_idx=None):
         if mode == 'lyrics':
             evaluation = self.sample_audio(lyrics=latent, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
             self.frechet_lyrics(evaluation, target=background)
@@ -213,8 +213,12 @@ class Ainur(L.LightningModule):
             print(f"Unknown mode='{mode}', expected one of 'lyrics', 'audio', 'noclip'.")
             return -1
 
-        torchaudio.save(os.path.join(tmp_dir, f"sample_{mode}{'_test' if test else ''}.wav"), evaluation[0].detach().cpu(), 48_000)
-        self.logger.experiment.log_audio(os.path.join(tmp_dir, f"sample_{mode}{'_test' if test else ''}.wav"))
+        torchaudio.save(os.path.join(tmp_dir, f"sample_{mode}{'_test' if test else ''}{f'_{batch_idx}' if batch_idx is not None else ''}.wav"), 
+                                     evaluation[0].detach().cpu(), 
+                                     48_000)
+        self.logger.experiment.log_audio(os.path.join(tmp_dir, 
+                                                      f"sample_{mode}{'_test' if test else ''}{f'_{batch_idx}' if batch_idx is not None else ''}.wav"))
+        self.logger.experiment.log_text(f"{f'batch_idx={batch_idx}_' if batch_idx is not None else ''}{text[0]}")
         del evaluation
         
 
@@ -311,7 +315,7 @@ if __name__ == "__main__":
                       devices=args.n_devices,
                       num_nodes=args.num_nodes,
                       default_root_dir=args.default_root_dir,
-                      num_sanity_val_steps=1,
+                      num_sanity_val_steps=0,
                       plugins=[SLURMEnvironment(requeue_signal=signal.SIGUSR1)],
                       callbacks=[StochasticWeightAveraging(swa_lrs=1e-4), checkpoint_callback])
 
