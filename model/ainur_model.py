@@ -137,12 +137,13 @@ class Ainur(L.LightningModule):
                 self.evaluate(text, mode='noclip', background=background)
 
     def on_validation_epoch_end(self):
-        self.log("FAD_lyrics", self.frechet_lyrics.compute(), on_epoch=True, prog_bar=True)
-        self.log("FAD_audio", self.frechet_audio.compute(), on_epoch=True, prog_bar=True)
-        self.log("FAD_noclip", self.frechet_noclip.compute(), on_epoch=True, prog_bar=True)
-        self.frechet_lyrics.reset()
-        self.frechet_audio.reset()
-        self.frechet_noclip.reset()
+        if self.current_epoch % self.checkpoint_every_n_epoch == 0:
+            self.log("FAD_lyrics", self.frechet_lyrics.compute(), on_epoch=True, prog_bar=True)
+            self.log("FAD_audio", self.frechet_audio.compute(), on_epoch=True, prog_bar=True)
+            self.log("FAD_noclip", self.frechet_noclip.compute(), on_epoch=True, prog_bar=True)
+            self.frechet_lyrics.reset()
+            self.frechet_audio.reset()
+            self.frechet_noclip.reset()
 
 
     def test_step(self, batch, batch_idx):
