@@ -11,6 +11,7 @@ from audio_diffusion_pytorch import (DiffusionModel, UNetV0, VDiffusion,
 from autoencoder import LitDAE
 from clip import CLIP
 from data.dataset import get_dataset
+from ema import EMA
 from fad import FAD
 from lightning import Trainer
 from lightning.pytorch.callbacks import (GradientAccumulationScheduler,
@@ -263,25 +264,25 @@ if __name__ == "__main__":
     # Trainer arguments
     parser.add_argument("--n_devices", type=int, default=1)
     parser.add_argument("--epochs", type=int, default=1000)
-    parser.add_argument("--accelerator", type=str, default='gpu')
+    parser.add_argument("--accelerator", type=str, default='cpu')
     parser.add_argument("--devices", type=int, default=-1)
     parser.add_argument("--num_nodes", type=int, default=1)
-    parser.add_argument("--precision", type=str, default='16-mixed')
+    parser.add_argument("--precision", type=str, default='32')
     parser.add_argument("--checkpoint_path", type=str, default=None)
-    parser.add_argument("--clip_checkpoint_path", type=str, default="/home/gconcialdi/ainur/runs/clip/checkpoints/clip.ckpt")
-    parser.add_argument("--default_root_dir", type=str, default="/home/gconcialdi/ainur/runs/")
+    parser.add_argument("--clip_checkpoint_path", type=str, default="/Users/gio/Desktop/clip.ckpt")
+    parser.add_argument("--default_root_dir", type=str, default="/Users/gio/Desktop/ainur/runs/")
     parser.add_argument("--checkpoint_every_n_epoch", type=int, default=10)
     parser.add_argument("--gradient_clip", type=float, default=0.25)
 
 
     # Hyperparameters for the model
-    parser.add_argument("--dataset_path", type=str, default="/home/gconcialdi/spotdl/")
+    parser.add_argument("--dataset_path", type=str, default="/Users/gio/spotdl/")
     parser.add_argument("--max_length", type=int, default=512)
     parser.add_argument("--crop", type=int, default=2**20)
     parser.add_argument("--sample_length", type=int, default=2**20)
-    parser.add_argument("--batch_size", type=int, default=16)
-    parser.add_argument("--num_workers", type=int, default=16)
-    parser.add_argument("--num_steps", type=int, default=50)
+    parser.add_argument("--batch_size", type=int, default=3)
+    parser.add_argument("--num_workers", type=int, default=12)
+    parser.add_argument("--num_steps", type=int, default=1)
     parser.add_argument("--embedding_scale", type=float, default=7.0)
 
 
@@ -311,6 +312,7 @@ if __name__ == "__main__":
 
     checkpoint_callback = ModelCheckpoint(dirpath=os.path.join(args.default_root_dir, "ainur_model/checkpoints/"))
     accumulator = GradientAccumulationScheduler(scheduling={0: 8, 100: 4, 200: 2, 300:1})
+    ema = EMA(0.995)
     trainer = Trainer(max_epochs=args.epochs,
                       logger=logger,
                       precision=args.precision,
@@ -321,6 +323,6 @@ if __name__ == "__main__":
                       num_sanity_val_steps=0,
                       gradient_clip_val=args.gradient_clip,
                       plugins=[SLURMEnvironment(requeue_signal=signal.SIGUSR1)],
-                      callbacks=[StochasticWeightAveraging(swa_lrs=1e-4), checkpoint_callback, accumulator])
+                      callbacks=[StochasticWeightAveraging(swa_lrs=1e-4), checkpoint_callback, accumulator, ema])
 
     trainer.fit(ainur, ckpt_path=args.checkpoint_path)
