@@ -37,7 +37,7 @@ class Ainur(L.LightningModule):
                  batch_size=64, 
                  sample_length=2**20, 
                  latent_factor=9, 
-                 clip_checkpoint_path="/Users/gio/Desktop/checkpoint.ckpt",
+                 clip_checkpoint_path=".",
                  num_steps=50,
                  embedding_scale=5.0,
                  checkpoint_every_n_epoch=10):
@@ -89,10 +89,10 @@ class Ainur(L.LightningModule):
 
     def training_step(self, batch, batch_idx, **kwargs):
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        audio, text, lyrics = batch
+        audio, text, _ = batch
         audio = audio.to(device)
         #latent = torch.cat((self.clip.encode_lyrics(lyrics).unsqueeze(1), self.clip.encode_audio(audio).unsqueeze(1)), dim=1) # b x 2 x 512
-        latent = self.clip.encode_lyrics(lyrics).unsqueeze(1).to(device) # b x 1 x 512
+        latent = self.clip.encode_audio(audio).unsqueeze(1).to(device) # b x 1 x 512
         channels = [None] * self.inject_depth + [latent]
         encoded_audio = self.autoencoder.encode(audio).to(device)
         
@@ -264,25 +264,25 @@ if __name__ == "__main__":
     # Trainer arguments
     parser.add_argument("--n_devices", type=int, default=1)
     parser.add_argument("--epochs", type=int, default=1000)
-    parser.add_argument("--accelerator", type=str, default='cpu')
+    parser.add_argument("--accelerator", type=str, default='gpu')
     parser.add_argument("--devices", type=int, default=-1)
     parser.add_argument("--num_nodes", type=int, default=1)
-    parser.add_argument("--precision", type=str, default='32')
+    parser.add_argument("--precision", type=str, default='16-mixed')
     parser.add_argument("--checkpoint_path", type=str, default=None)
-    parser.add_argument("--clip_checkpoint_path", type=str, default="/Users/gio/Desktop/clip.ckpt")
-    parser.add_argument("--default_root_dir", type=str, default="/Users/gio/Desktop/ainur/runs/")
+    parser.add_argument("--clip_checkpoint_path", type=str, default="/home/gconcialdi/ainur/runs/clip/checkpoints/clip.ckpt")
+    parser.add_argument("--default_root_dir", type=str, default="/home/gconcialdi/ainur/runs/")
     parser.add_argument("--checkpoint_every_n_epoch", type=int, default=10)
     parser.add_argument("--gradient_clip", type=float, default=0.25)
 
 
     # Hyperparameters for the model
-    parser.add_argument("--dataset_path", type=str, default="/Users/gio/spotdl/")
+    parser.add_argument("--dataset_path", type=str, default="/home/gconcialdi/spotdl/")
     parser.add_argument("--max_length", type=int, default=512)
     parser.add_argument("--crop", type=int, default=2**20)
     parser.add_argument("--sample_length", type=int, default=2**20)
-    parser.add_argument("--batch_size", type=int, default=3)
-    parser.add_argument("--num_workers", type=int, default=12)
-    parser.add_argument("--num_steps", type=int, default=1)
+    parser.add_argument("--batch_size", type=int, default=16)
+    parser.add_argument("--num_workers", type=int, default=16)
+    parser.add_argument("--num_steps", type=int, default=50)
     parser.add_argument("--embedding_scale", type=float, default=7.0)
 
 
@@ -293,7 +293,7 @@ if __name__ == "__main__":
         api_key="9LmOAqSG4omncUN3QT42iQoqb",
         project_name="ainur",
         workspace="gio99c",
-        experiment_name="ainur",
+        experiment_name="ainur_v2",
         offline=True
         )
 
@@ -310,7 +310,7 @@ if __name__ == "__main__":
                   checkpoint_every_n_epoch=args.checkpoint_every_n_epoch
                   )
 
-    checkpoint_callback = ModelCheckpoint(dirpath=os.path.join(args.default_root_dir, "ainur_model/checkpoints/"))
+    checkpoint_callback = ModelCheckpoint(dirpath=os.path.join(args.default_root_dir, "ainur_model_v2/checkpoints/"))
     accumulator = GradientAccumulationScheduler(scheduling={0: 8, 100: 4, 200: 2, 300:1})
     ema = EMA(0.995)
     trainer = Trainer(max_epochs=args.epochs,
