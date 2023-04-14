@@ -3,21 +3,23 @@ import signal
 
 import comet_ml
 import lightning as L
+import numpy as np
 import torch
 import torchaudio
-import numpy as np
 from audio_diffusion_pytorch import (DiffusionModel, UNetV0, VDiffusion,
                                      VSampler)
 from autoencoder import LitDAE
 from clip import CLIP
 from data.dataset import get_dataset
+from fad import FAD
 from lightning import Trainer
-from lightning.pytorch.callbacks import (ModelCheckpoint,
+from lightning.pytorch.callbacks import (GradientAccumulationScheduler,
+                                         ModelCheckpoint,
                                          StochasticWeightAveraging)
 from lightning.pytorch.loggers.comet import CometLogger
 from lightning.pytorch.plugins.environments import SLURMEnvironment
 from torch.utils.data import DataLoader, random_split
-from fad import FAD
+
 
 def select(key, **kwargs):
     value = kwargs.get(key, None)
@@ -269,6 +271,7 @@ if __name__ == "__main__":
     parser.add_argument("--clip_checkpoint_path", type=str, default="/home/gconcialdi/ainur/runs/clip/checkpoints/clip.ckpt")
     parser.add_argument("--default_root_dir", type=str, default="/home/gconcialdi/ainur/runs/")
     parser.add_argument("--checkpoint_every_n_epoch", type=int, default=10)
+    parser.add_argument("--gradient_clip", type=float, default=0.25)
 
 
     # Hyperparameters for the model
@@ -307,6 +310,7 @@ if __name__ == "__main__":
                   )
 
     checkpoint_callback = ModelCheckpoint(dirpath=os.path.join(args.default_root_dir, "ainur_model/checkpoints/"))
+    accumulator = GradientAccumulationScheduler(scheduling={0: 8, 100: 4, 200: 2, 300:1})
     trainer = Trainer(max_epochs=args.epochs,
                       logger=logger,
                       precision=args.precision,
@@ -315,7 +319,8 @@ if __name__ == "__main__":
                       num_nodes=args.num_nodes,
                       default_root_dir=args.default_root_dir,
                       num_sanity_val_steps=0,
+                      gradient_clip_val=args.gradient_clip,
                       plugins=[SLURMEnvironment(requeue_signal=signal.SIGUSR1)],
-                      callbacks=[StochasticWeightAveraging(swa_lrs=1e-4), checkpoint_callback])
+                      callbacks=[StochasticWeightAveraging(swa_lrs=1e-4), checkpoint_callback, accumulator])
 
     trainer.fit(ainur, ckpt_path=args.checkpoint_path)
