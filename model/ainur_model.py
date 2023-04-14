@@ -311,8 +311,8 @@ if __name__ == "__main__":
                   )
 
     checkpoint_callback = ModelCheckpoint(dirpath=os.path.join(args.default_root_dir, "ainur_model_v2/checkpoints/"))
-    accumulator = GradientAccumulationScheduler(scheduling={0: 4})
-    #ema = EMA(0.995)
+    #accumulator = GradientAccumulationScheduler(scheduling={0: 4})
+    ema = EMA(0.995)
     trainer = Trainer(max_epochs=args.epochs,
                       logger=logger,
                       precision=args.precision,
@@ -323,6 +323,6 @@ if __name__ == "__main__":
                       num_sanity_val_steps=0,
                       gradient_clip_val=args.gradient_clip,
                       plugins=[SLURMEnvironment(requeue_signal=signal.SIGUSR1)],
-                      callbacks=[StochasticWeightAveraging(swa_lrs=1e-4), checkpoint_callback, accumulator])
+                      callbacks=[StochasticWeightAveraging(swa_lrs=1e-4), checkpoint_callback, ema])
 
     trainer.fit(ainur, ckpt_path=args.checkpoint_path)
