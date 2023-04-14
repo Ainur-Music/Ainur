@@ -132,7 +132,7 @@ class Ainur(L.LightningModule):
                 self.logger.experiment.log_audio(os.path.join(tmp_dir, f"original_{batch_idx}.wav"))
 
                 # Compute fad and log audio
-                self.evaluate(text, lyrics, mode='lyrics', background=background, batch_idx=batch_idx)
+                self.evaluate(text, lyrics, mode='lyrics', lyrics=lyrics, background=background, batch_idx=batch_idx)
                 self.evaluate(text, audio, mode='audio', background=background, batch_idx=batch_idx)
                 self.evaluate(text, mode='noclip', background=background, batch_idx=batch_idx)
 
@@ -198,7 +198,7 @@ class Ainur(L.LightningModule):
     
 
     @torch.no_grad()
-    def evaluate(self, text, latent=None, mode='lyrics', background=None, test=False, tmp_dir=".tmp", batch_idx=None):
+    def evaluate(self, text, latent=None, mode='lyrics', lyrics=None, background=None, test=False, tmp_dir=".tmp", batch_idx=None):
         if mode == 'lyrics':
             evaluation = self.sample_audio(lyrics=latent, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
             self.frechet_lyrics(evaluation, target=background)
@@ -217,7 +217,7 @@ class Ainur(L.LightningModule):
                                      48_000)
         self.logger.experiment.log_audio(os.path.join(tmp_dir, 
                                                       f"sample_{mode}{'_test' if test else ''}{f'_{batch_idx}' if batch_idx is not None else ''}.wav"))
-        self.logger.experiment.log_text(f"{f'batch_idx={batch_idx}_' if batch_idx is not None else ''}{text[0]}")
+        self.logger.experiment.log_text(f"{f'batch_idx={batch_idx}_' if batch_idx is not None else ''}{text[0]}{f'_lyrics: {lyrics[0]}' if lyrics is not None else ''}")
         del evaluation
         
 
