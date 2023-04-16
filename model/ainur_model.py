@@ -294,7 +294,7 @@ if __name__ == "__main__":
         project_name="ainur",
         workspace="gio99c",
         experiment_name="ainur_v2",
-        offline=True
+        offline=False
         )
 
     inject_depth = int(np.log2(args.crop / 2**18))
@@ -311,7 +311,7 @@ if __name__ == "__main__":
                   )
 
     checkpoint_callback = ModelCheckpoint(dirpath=os.path.join(args.default_root_dir, "ainur_model_v2/checkpoints/"))
-    accumulator = GradientAccumulationScheduler(scheduling={0: 1})
+    accumulator = GradientAccumulationScheduler(scheduling={0: 4, 300: 2, 500: 1})
     ema = EMA(0.995)
     trainer = Trainer(max_epochs=args.epochs,
                       logger=logger,
