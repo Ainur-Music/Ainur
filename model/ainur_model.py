@@ -19,6 +19,7 @@ from lightning.pytorch.callbacks import (GradientAccumulationScheduler,
                                          StochasticWeightAveraging)
 from lightning.pytorch.loggers.comet import CometLogger
 from lightning.pytorch.plugins.environments import SLURMEnvironment
+from lightning.pytorch.strategies import DDPStrategy
 from torch.utils.data import DataLoader, random_split
 
 
@@ -322,7 +323,7 @@ if __name__ == "__main__":
                       default_root_dir=args.default_root_dir,
                       num_sanity_val_steps=0,
                       gradient_clip_val=args.gradient_clip,
-                      strategy="ddp",
+                      strategy=DDPStrategy(find_unused_parameters=True),
                       plugins=[SLURMEnvironment(requeue_signal=signal.SIGUSR1)],
                       callbacks=[StochasticWeightAveraging(swa_lrs=1e-4), checkpoint_callback, accumulator, ema])
 
