@@ -18,7 +18,6 @@ class FAD(Metric):
         self.__get_model(use_pca=use_pca, use_activation=use_activation)
         self.verbose = verbose
         self.add_state("embds_lst", [], dist_reduce_fx="cat")
-        self.resample = T.Resample(48_000, SAMPLE_RATE)
     
     def __get_model(self, use_pca=False, use_activation=False):
         """
@@ -121,7 +120,8 @@ class FAD(Metric):
             return torch.load(save_path)
         
         if background:
-            embds_background = self.get_embeddings([torch.mean(self.resample(sample.detach().squeeze()), dim=0).cpu().numpy()  for sample in tqdm(background, disable=(not self.verbose))])
+            resample = T.Resample(48_000, SAMPLE_RATE)
+            embds_background = self.get_embeddings([torch.mean(resample(sample.detach().squeeze()), dim=0).cpu().numpy()  for sample in tqdm(background, disable=(not self.verbose))])
             if len(embds_background) == 0:
                 print("[Frechet Audio Distance] background set dir is empty, exitting...")
                 return -1
@@ -135,7 +135,8 @@ class FAD(Metric):
     
 
     def update(self, preds, target=None):
-        self.embds_lst.append(self.get_embeddings([torch.mean(self.resample(sample.detach().squeeze()), dim=0).cpu().numpy() for sample in tqdm(preds, disable=(not self.verbose))]))
+        resample = T.Resample(48_000, SAMPLE_RATE)
+        self.embds_lst.append(self.get_embeddings([torch.mean(resample(sample.detach().squeeze()), dim=0).cpu().numpy() for sample in tqdm(preds, disable=(not self.verbose))]))
         self.target = target
         if len(self.embds_lst) == 0:
             print("[Frechet Audio Distance] eval set dir is empty, exitting...")
