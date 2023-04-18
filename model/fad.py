@@ -99,7 +99,8 @@ class FAD(Metric):
                 'adding %s to diagonal of cov estimates') % eps
             print(msg)
             offset = torch.eye(sigma1.shape[0]) * eps
-            covmean = torch.tensor(sqrtm(((sigma1 + offset) @ (sigma2 + offset)).cpu()))
+            covmean, _ = sqrtm(((sigma1 + offset) @ (sigma2 + offset)).cpu())
+            covmean = torch.tensor(covmean)
 
         # Numerical error might give slight imaginary component
         if torch.is_complex(covmean):
