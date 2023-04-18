@@ -106,7 +106,7 @@ class Ainur(L.LightningModule):
                                     **kwargs)
         with torch.no_grad():
             # Log loss
-            self.log('loss', loss, on_epoch=True, prog_bar=True, batch_size=batch_size)
+            self.log('loss', loss, on_epoch=True, prog_bar=True, batch_size=batch_size, sync_dist=True)
 
         return loss
     
@@ -142,9 +142,9 @@ class Ainur(L.LightningModule):
 
     def on_validation_epoch_end(self):
         if self.current_epoch % self.checkpoint_every_n_epoch == 0:
-            self.log("FAD_lyrics", self.frechet_lyrics.compute(), on_epoch=True, prog_bar=True)
-            self.log("FAD_audio", self.frechet_audio.compute(), on_epoch=True, prog_bar=True)
-            self.log("FAD_noclip", self.frechet_noclip.compute(), on_epoch=True, prog_bar=True)
+            self.log("FAD_lyrics", self.frechet_lyrics.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
+            self.log("FAD_audio", self.frechet_audio.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
+            self.log("FAD_noclip", self.frechet_noclip.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
             self.frechet_lyrics.reset()
             self.frechet_audio.reset()
             self.frechet_noclip.reset()
@@ -266,7 +266,6 @@ if __name__ == "__main__":
     parser.add_argument("--n_devices", type=int, default=1)
     parser.add_argument("--epochs", type=int, default=1000)
     parser.add_argument("--accelerator", type=str, default='gpu')
-    parser.add_argument("--devices", type=int, default=-1)
     parser.add_argument("--num_nodes", type=int, default=1)
     parser.add_argument("--precision", type=str, default='16-mixed')
     parser.add_argument("--checkpoint_path", type=str, default=None)

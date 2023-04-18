@@ -3,10 +3,9 @@ Adapted from https://github.com/gudgud96/frechet-audio-distance
 """
 import os
 
-import numpy as np
-import resampy
 import torch
-from scipy import linalg
+import torchaudio.transforms as T
+from scipy.linalg import sqrtm
 from torch import nn
 from torchmetrics import Metric
 from tqdm import tqdm
@@ -19,6 +18,7 @@ class FAD(Metric):
         self.__get_model(use_pca=use_pca, use_activation=use_activation)
         self.verbose = verbose
         self.add_state("embds_lst", [], dist_reduce_fx="cat")
+        self.resample = T.Resample(48_000, SAMPLE_RATE)
     
     def __get_model(self, use_pca=False, use_activation=False):
         """
@@ -40,34 +40,34 @@ class FAD(Metric):
         Params:
         -- x    : Either 
             (i) a string which is the directory of a set of audio files, or
-            (ii) a list of np.ndarray audio samples
+            (ii) a list of torch.tensor audio samples
         -- sr   : Sampling rate, if x is a list of audio samples. Default value is 16000.
         """
         embd_lst = []
         for audio in tqdm(x, disable=(not self.verbose)):
             embd = self.model.forward(audio, sr)
-            embd = embd.detach().cpu().numpy()
+            embd = embd.clone().detach()
             embd_lst.append(embd)
-        return np.concatenate(embd_lst, axis=0)
+        return torch.cat(embd_lst, dim=0)
     
     def calculate_embd_statistics(self, embd_lst):
         if isinstance(embd_lst, list):
-            embd_lst = np.array(embd_lst[0])
-        mu = np.mean(embd_lst, axis=0)
-        sigma = np.cov(embd_lst, rowvar=False)
+            embd_lst = torch.cat(embd_lst, dim=0)
+        mu = torch.mean(embd_lst, dim=0)
+        sigma = torch.cov(embd_lst.T)
         return [mu, sigma]
     
     def calculate_frechet_distance(self, mu1, sigma1, mu2, sigma2, eps=1e-6):
         """
         Adapted from: https://github.com/mseitzer/pytorch-fid/blob/master/src/pytorch_fid/fid_score.py
         
-        Numpy implementation of the Frechet Distance.
+        Torch implementation of the Frechet Distance.
         The Frechet distance between two multivariate Gaussians X_1 ~ N(mu_1, C_1)
         and X_2 ~ N(mu_2, C_2) is
                 d^2 = ||mu_1 - mu_2||^2 + Tr(C_1 + C_2 - 2*sqrt(C_1*C_2)).
         Stable version by Dougal J. Sutherland.
         Params:
-        -- mu1   : Numpy array containing the activations of a layer of the
+        -- mu1   : Tensor containing the activations of a layer of the
                 inception net (like returned by the function 'get_predictions')
                 for generated samples.
         -- mu2   : The sample mean over activations, precalculated on an
@@ -79,11 +79,11 @@ class FAD(Metric):
         --   : The Frechet Distance.
         """
 
-        mu1 = np.atleast_1d(mu1)
-        mu2 = np.atleast_1d(mu2)
+        mu1 = torch.atleast_1d(mu1)
+        mu2 = torch.atleast_1d(mu2)
 
-        sigma1 = np.atleast_2d(sigma1)
-        sigma2 = np.atleast_2d(sigma2)
+        sigma1 = torch.atleast_2d(sigma1)
+        sigma2 = torch.atleast_2d(sigma2)
 
         assert mu1.shape == mu2.shape, \
             'Training and test mean vectors have different lengths'
@@ -93,25 +93,26 @@ class FAD(Metric):
         diff = mu1 - mu2
 
         # Product might be almost singular
-        covmean, _ = linalg.sqrtm(sigma1.dot(sigma2), disp=False)
-        if not np.isfinite(covmean).all():
+        covmean, _ = sqrtm(sigma1 @ sigma2, disp=False)
+        covmean = torch.tensor(covmean)
+        if not torch.isfinite(covmean).all():
             msg = ('fid calculation produces singular product; '
                 'adding %s to diagonal of cov estimates') % eps
             print(msg)
-            offset = np.eye(sigma1.shape[0]) * eps
-            covmean = linalg.sqrtm((sigma1 + offset).dot(sigma2 + offset))
+            offset = torch.eye(sigma1.shape[0]) * eps
+            covmean = torch.tensor(sqrtm((sigma1 + offset) @ (sigma2 + offset)))
 
         # Numerical error might give slight imaginary component
-        if np.iscomplexobj(covmean):
-            if not np.allclose(np.diagonal(covmean).imag, 0, atol=1e-3):
-                m = np.max(np.abs(covmean.imag))
+        if torch.is_complex(covmean):
+            if not torch.allclose(torch.diagonal(covmean).imag, torch.tensor(0.), atol=1e-3):
+                m = torch.max(torch.abs(covmean.imag))
                 raise ValueError('Imaginary component {}'.format(m))
             covmean = covmean.real
 
-        tr_covmean = np.trace(covmean)
+        tr_covmean = torch.trace(covmean)
 
-        return (diff.dot(diff) + np.trace(sigma1)
-                + np.trace(sigma2) - 2 * tr_covmean)
+        return (diff @ diff + torch.trace(sigma1)
+                + torch.trace(sigma2) - 2 * tr_covmean)
     
     
     def calculate_embd_statistics_background(self, background=None, save_path=".tmp/"):
@@ -120,7 +121,7 @@ class FAD(Metric):
             return torch.load(save_path)
         
         if background:
-            embds_background = self.get_embeddings([np.mean(resampy.resample(sample.detach().squeeze().cpu().numpy(), 48_000, SAMPLE_RATE), axis=0) for sample in tqdm(background, disable=(not self.verbose))])
+            embds_background = self.get_embeddings([torch.mean(self.resample(sample.detach().squeeze()), dim=0).cpu().numpy()  for sample in tqdm(background, disable=(not self.verbose))])
             if len(embds_background) == 0:
                 print("[Frechet Audio Distance] background set dir is empty, exitting...")
                 return -1
@@ -134,7 +135,7 @@ class FAD(Metric):
     
 
     def update(self, preds, target=None):
-        self.embds_lst.append(self.get_embeddings([np.mean(resampy.resample(sample.detach().cpu().numpy(), 48_000, SAMPLE_RATE), axis=0) for sample in tqdm(preds, disable=(not self.verbose))]))
+        self.embds_lst.append(self.get_embeddings([torch.mean(self.resample(sample.detach().squeeze()), dim=0).cpu().numpy() for sample in tqdm(preds, disable=(not self.verbose))]))
         self.target = target
         if len(self.embds_lst) == 0:
             print("[Frechet Audio Distance] eval set dir is empty, exitting...")
