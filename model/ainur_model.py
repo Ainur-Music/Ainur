@@ -273,6 +273,8 @@ if __name__ == "__main__":
     parser.add_argument("--default_root_dir", type=str, default="/home/gconcialdi/ainur/runs/")
     parser.add_argument("--checkpoint_every_n_epoch", type=int, default=10)
     parser.add_argument("--gradient_clip", type=float, default=0.25)
+    parser.add_argument("--sanity_steps", type=int, default=0)
+
 
 
     # Hyperparameters for the model
@@ -320,7 +322,7 @@ if __name__ == "__main__":
                       devices=args.n_devices,
                       num_nodes=args.num_nodes,
                       default_root_dir=args.default_root_dir,
-                      num_sanity_val_steps=0,
+                      num_sanity_val_steps=args.sanity_steps,
                       gradient_clip_val=args.gradient_clip,
                       strategy=DDPStrategy(find_unused_parameters=True),
                       plugins=[SLURMEnvironment(requeue_signal=signal.SIGUSR1)],

@@ -91,14 +91,14 @@ class FAD(Metric):
         diff = mu1 - mu2
 
         # Product might be almost singular
-        covmean, _ = sqrtm((sigma1 @ sigma2).cpu(), disp=False)
+        covmean = sqrtm((sigma1 @ sigma2).cpu(), disp=False)
         covmean = torch.tensor(covmean)
         if not torch.isfinite(covmean).all():
             msg = ('fid calculation produces singular product; '
                 'adding %s to diagonal of cov estimates') % eps
             print(msg)
             offset = torch.eye(sigma1.shape[0]) * eps
-            covmean, _ = sqrtm(((sigma1 + offset) @ (sigma2 + offset)).cpu())
+            covmean = sqrtm(((sigma1 + offset) @ (sigma2 + offset)).cpu())
             covmean = torch.tensor(covmean)
 
         # Numerical error might give slight imaginary component
