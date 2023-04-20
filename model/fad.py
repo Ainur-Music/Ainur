@@ -357,12 +357,6 @@ def sqrtm(A, disp=True, blocksize=64):
     if disp:
         if failflag:
             print("Failed to find a square root.")
-        return X
-    else:
-        try:
-            arg2 = norm(X.dot(X) - A, 'fro')**2 / norm(A, 'fro')
-        except (ValueError, ZeroDivisionError):
-            # NaNs in matrix
-            arg2 = np.inf
 
-        return X, arg2
+            
+    return X
