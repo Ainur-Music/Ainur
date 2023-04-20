@@ -99,8 +99,8 @@ class FAD(Metric):
                 'adding %s to diagonal of cov estimates') % eps
             print(msg)
             offset = torch.eye(sigma1.shape[0]) * eps
-            covmean = sqrtm(((sigma1 + offset) @ (sigma2 + offset)).cpu())
-            covmean = torch.tensor(covmean)
+            covmean = sqrtm(((sigma1 + offset) @ (sigma2 + offset)).cpu().float())
+            covmean = torch.tensor(covmean).float()
 
         # Numerical error might give slight imaginary component
         if torch.is_complex(covmean):
@@ -109,12 +109,10 @@ class FAD(Metric):
                 raise ValueError('Imaginary component {}'.format(m))
             covmean = covmean.real
 
-        print(covmean)
-        print(torch.trace(covmean))
         tr_covmean = torch.trace(covmean)
 
-        return (diff @ diff + torch.trace(sigma1)
-                + torch.trace(sigma2) - 2 * tr_covmean)
+        return (diff @ diff + torch.trace(sigma1.float())
+                + torch.trace(sigma2.float()) - 2 * tr_covmean)
     
     
     def calculate_embd_statistics_background(self, background=None, save_path=".tmp/"):
