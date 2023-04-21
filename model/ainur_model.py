@@ -3,8 +3,8 @@ import signal
 
 import comet_ml
 import lightning as L
-import numpy as np
 import torch
+import torch.nn.functional as F
 import torchaudio
 from audio_diffusion_pytorch import (DiffusionModel, UNetV0, VDiffusion,
                                      VSampler)
@@ -75,7 +75,7 @@ class Ainur(L.LightningModule):
             attention_features=64, # U-Net: number of attention features per attention item
             use_text_conditioning=True, # U-Net: enables text conditioning (default T5-base)
             use_embedding_cfg=True, # U-Net: enables classifier free guidance
-            embedding_max_length=64, # U-Net: text embedding maximum length (default for T5-base)
+            embedding_max_length=65, # U-Net: text embedding maximum length (default for T5-base)
             embedding_features=768, # U-Net: text embedding features (default for T5-base)
             cross_attentions=[1, 1, 1, 1, 1, 1], # U-Net: cross-attention enabled/disabled at each layer
             diffusion_t=VDiffusion, 
@@ -93,7 +93,7 @@ class Ainur(L.LightningModule):
         batch_size = audio.shape[0]
         loss = self.diffusion_model(encoded_audio, 
                                     text=text, 
-                                    embedding=latent, 
+                                    embedding=F.pad(latent, (0, 768-512)), 
                                     embedding_mask_proba=0.1,
                                     **kwargs)
         with torch.no_grad():
@@ -235,7 +235,7 @@ class Ainur(L.LightningModule):
 
 
         # Decode by sampling while conditioning on latent channels
-        return self.diffusion_model.sample(noise, embedding=latent, **kwargs).to(device)
+        return self.diffusion_model.sample(noise, embedding=F.pad(latent, (0, 768-512)), **kwargs).to(device)
     
 
     @torch.no_grad()
@@ -289,7 +289,7 @@ if __name__ == "__main__":
         offline=False
         )
 
-    inject_depth = int(np.log2(args.crop / 2**18))
+
     ainur = Ainur( 
                   crop=args.crop, 
                   dataset_path=args.dataset_path, 
