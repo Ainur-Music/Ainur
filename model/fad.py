@@ -92,7 +92,7 @@ class FAD(Metric):
         diff = mu1 - mu2
 
         # Product might be almost singular
-        covmean, _ = sqrtm((sigma1 @ sigma2).cpu(), disp=False)
+        covmean, _ = sqrtm((sigma1 @ sigma2).cpu().float(), disp=False)
         covmean = torch.tensor(covmean)
         if not torch.isfinite(covmean).all():
             msg = ('fid calculation produces singular product; '
@@ -100,7 +100,7 @@ class FAD(Metric):
             print(msg)
             offset = torch.eye(sigma1.shape[0]) * eps
             covmean = sqrtm(((sigma1 + offset) @ (sigma2 + offset)).cpu().float())
-            covmean = torch.tensor(covmean).float()
+            covmean = torch.tensor(covmean)
 
         # Numerical error might give slight imaginary component
         if torch.is_complex(covmean):
@@ -109,7 +109,7 @@ class FAD(Metric):
                 raise ValueError('Imaginary component {}'.format(m))
             covmean = covmean.real
 
-        tr_covmean = torch.trace(covmean)
+        tr_covmean = torch.trace(covmean.float())
 
         return (diff @ diff + torch.trace(sigma1.float())
                 + torch.trace(sigma2.float()) - 2 * tr_covmean)
