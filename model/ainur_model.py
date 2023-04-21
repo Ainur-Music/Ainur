@@ -87,14 +87,13 @@ class Ainur(L.LightningModule):
         audio, text, _ = batch
         audio = audio.to(device)
         latent = self.clip.encode_audio(audio).unsqueeze(1).to(device) # b x 1 x 512
-        channels = [None] * self.inject_depth + [latent]
         encoded_audio = self.autoencoder.encode(audio).to(device)
         
         # Compute diffusion loss
         batch_size = audio.shape[0]
         loss = self.diffusion_model(encoded_audio, 
                                     text=text, 
-                                    channels=channels, 
+                                    embedding=latent, 
                                     embedding_mask_proba=0.1,
                                     **kwargs)
         with torch.no_grad():
@@ -291,7 +290,7 @@ if __name__ == "__main__":
         )
 
     inject_depth = int(np.log2(args.crop / 2**18))
-    ainur = Ainur(inject_depth=inject_depth, 
+    ainur = Ainur( 
                   crop=args.crop, 
                   dataset_path=args.dataset_path, 
                   num_workers=args.num_workers, 
