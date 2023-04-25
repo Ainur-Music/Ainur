@@ -118,7 +118,7 @@ class CLIP(L.LightningModule):
     def encode_lyrics(self, lyrics):
         lyrics_tokenized = self.tokenizer(text=lyrics, return_tensors="pt", padding=True, max_length=self.max_length, truncation=True).to(device)
         lyrics_features = self.model.get_text_features(**lyrics_tokenized).to(device)
-        return torch.tanh(0.2*lyrics_features)
+        return lyrics_features
 
     @torch.no_grad()
     def encode_audio(self, audio):
@@ -129,7 +129,7 @@ class CLIP(L.LightningModule):
 
         images_processed = self.processor(images=images, return_tensors="pt", padding=True, max_length=self.max_length, truncation=True).to(device)
         audio_features = self.model.get_image_features(**images_processed).to(device)
-        return torch.tanh(0.2*audio_features)
+        return audio_features
     
     def train_dataloader(self):
         dataset = get_dataset(self.dataset_path, crop=self.crop)

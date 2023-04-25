@@ -285,7 +285,7 @@ if __name__ == "__main__":
         api_key="9LmOAqSG4omncUN3QT42iQoqb",
         project_name="ainur",
         workspace="gio99c",
-        experiment_name="ainur_v3",
+        experiment_name="ainur_v4",
         offline=False
         )
 
@@ -302,7 +302,7 @@ if __name__ == "__main__":
                   checkpoint_every_n_epoch=args.checkpoint_every_n_epoch
                   )
 
-    checkpoint_callback = ModelCheckpoint(dirpath=os.path.join(args.default_root_dir, "ainur_model_v3/checkpoints/"), monitor="loss_epoch", save_last=True)
+    checkpoint_callback = ModelCheckpoint(dirpath=os.path.join(args.default_root_dir, "ainur_model_v4/checkpoints/"), monitor="loss_epoch", save_last=True)
     accumulator = GradientAccumulationScheduler(scheduling={0: 4, 300: 2, 500: 1})
     ema = EMA(0.995)
     trainer = Trainer(max_epochs=args.epochs,
