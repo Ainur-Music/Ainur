@@ -304,7 +304,7 @@ if __name__ == "__main__":
 
     checkpoint_callback = ModelCheckpoint(dirpath=os.path.join(args.default_root_dir, "ainur_model_v4/checkpoints/"), monitor="loss_epoch", save_last=True)
     accumulator = GradientAccumulationScheduler(scheduling={0: 4, 300: 2, 500: 1})
-    ema = EMA(0.995)
+    ema = EMA(0.999)
     trainer = Trainer(max_epochs=args.epochs,
                       logger=logger,
                       precision=args.precision,
