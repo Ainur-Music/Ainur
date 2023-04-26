@@ -1,15 +1,17 @@
-import comet_ml
 import os
 import signal
 
+import comet_ml
 import lightning as L
 import torch
 import torch.nn.functional as F
 from comet_ml import Experiment
 from data.dataset import get_dataset
 from einops import pack, rearrange, unpack
+from ema import EMA
 from lightning import Trainer
-from lightning.pytorch.callbacks import (ModelCheckpoint,
+from lightning.pytorch.callbacks import (GradientAccumulationScheduler,
+                                         ModelCheckpoint,
                                          StochasticWeightAveraging)
 from lightning.pytorch.loggers.comet import CometLogger
 from lightning.pytorch.plugins.environments import SLURMEnvironment
@@ -150,6 +152,8 @@ if __name__ == "__main__":
     parser.add_argument("--precision", type=str, default='16-mixed')
     parser.add_argument("--checkpoint_path", type=str, default=None)
     parser.add_argument("--default_root_dir", type=str, default="/home/gconcialdi/ainur/runs/")
+    parser.add_argument("--gradient_clip", type=float, default=1)
+    parser.add_argument("--sanity_steps", type=int, default=0)
 
 
     # Hyperparameters for the model
@@ -174,6 +178,8 @@ if __name__ == "__main__":
 
 
     clip = CLIP(max_length=args.max_length, crop=args.crop, batch_size=args.batch_size, dataset_path=args.dataset_path, num_workers=args.num_workers)
+    accumulator = GradientAccumulationScheduler(scheduling={0: 4, 600: 2, 900: 1})
+    ema = EMA(0.999)
 
     checkpoint_callback = ModelCheckpoint(dirpath=os.path.join(args.default_root_dir, "clip/checkpoints/"))
     trainer = Trainer(max_epochs=args.epochs,
@@ -183,7 +189,9 @@ if __name__ == "__main__":
                       devices=args.n_devices,
                       num_nodes=args.num_nodes,
                       default_root_dir=args.default_root_dir,
-                      plugins=[SLURMEnvironment(requeue_signal=signal.SIGHUP)],
-                      callbacks=[StochasticWeightAveraging(swa_lrs=1e-4), checkpoint_callback])
+                      num_sanity_val_steps=args.sanity_steps,
+                      gradient_clip_val=args.gradient_clip,
+                      plugins=[SLURMEnvironment(requeue_signal=signal.SIGUSR1)],
+                      callbacks=[StochasticWeightAveraging(swa_lrs=1e-4), checkpoint_callback, accumulator, ema])
 
     trainer.fit(clip, ckpt_path=args.checkpoint_path)
