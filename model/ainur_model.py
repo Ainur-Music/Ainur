@@ -194,14 +194,14 @@ class Ainur(L.LightningModule):
     
 
     @torch.no_grad()
-    def evaluate(self, text, latent=None, mode='lyrics', lyrics=None, background=None, test=False, tmp_dir=".tmp", batch_idx=None):
+    def evaluate(self, text, conditioning=None, mode='lyrics', background=None, test=False, tmp_dir=".tmp", batch_idx=None):
         if mode == 'lyrics':
-            evaluation = self.sample_audio(lyrics=latent, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
+            evaluation = self.sample_audio(lyrics=conditioning, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
             self.frechet_lyrics(evaluation, target=background)
         elif mode == 'audio':
-            evaluation = self.sample_audio(audio=latent, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
+            evaluation = self.sample_audio(audio=conditioning, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
             self.frechet_audio(evaluation, target=background)
-        elif (latent is None) and (mode == 'noclip'):
+        elif (conditioning is None) and (mode == 'noclip'):
             evaluation = self.sample_audio(n_samples=len(text), text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
             self.frechet_noclip(evaluation, target=background)
         else:
@@ -213,7 +213,7 @@ class Ainur(L.LightningModule):
                                      48_000)
         self.logger.experiment.log_audio(os.path.join(tmp_dir, 
                                                       f"sample_{mode}{'_test' if test else ''}{f'_{batch_idx}' if batch_idx is not None else ''}.wav"))
-        self.logger.experiment.log_text(f"{f'batch_idx={batch_idx}_' if batch_idx is not None else ''}{text[0]}{f'_lyrics: {lyrics[0]}' if lyrics is not None else ''}")
+        self.logger.experiment.log_text(f"{f'batch_idx={batch_idx}_' if batch_idx is not None else ''}{text[0]}{f'_lyrics: {conditioning[0]}' if mode == 'lyrics' else ''}")
         del evaluation
         
 
@@ -262,7 +262,7 @@ if __name__ == "__main__":
     parser.add_argument("--clip_checkpoint_path", type=str, default="/home/gconcialdi/ainur/runs/clip/checkpoints/clip.ckpt")
     parser.add_argument("--default_root_dir", type=str, default="/home/gconcialdi/ainur/runs/")
     parser.add_argument("--checkpoint_every_n_epoch", type=int, default=10)
-    parser.add_argument("--gradient_clip", type=float, default=0.25)
+    parser.add_argument("--gradient_clip", type=float, default=1)
     parser.add_argument("--sanity_steps", type=int, default=0)
 
 
