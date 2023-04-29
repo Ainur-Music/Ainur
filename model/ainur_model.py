@@ -128,7 +128,7 @@ class Ainur(L.LightningModule):
                 self.logger.experiment.log_audio(os.path.join(tmp_dir, f"original_{batch_idx}.wav"))
 
                 # Compute fad and log audio
-                self.evaluate(text, lyrics, mode='lyrics', lyrics=lyrics, background=background, batch_idx=batch_idx)
+                self.evaluate(text, lyrics, mode='lyrics', background=background, batch_idx=batch_idx)
                 self.evaluate(text, audio, mode='audio', background=background, batch_idx=batch_idx)
                 self.evaluate(text, mode='noclip', background=background, batch_idx=batch_idx)
 
@@ -143,12 +143,11 @@ class Ainur(L.LightningModule):
 
 
     def test_step(self, batch, batch_idx):
-        #device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         audio, text, lyrics = batch
-        audio = audio.cpu()
+        audio = audio.to(device)
         text = text
         lyrics = lyrics
-        batch_size = audio.shape[0]
 
         # Create hidden tmp directory
         tmp_dir = os.path.join(os.getcwd(), ".tmp")
@@ -169,9 +168,18 @@ class Ainur(L.LightningModule):
             self.logger.experiment.log_audio(os.path.join(tmp_dir, f"original_{batch_idx}.wav"))
 
             # Compute fad and log audio
-            self.evaluate(text, lyrics, mode='lyrics', background=background, batch_size=batch_size, batch_idx=batch_idx)
-            self.evaluate(text, audio, mode='audio', background=background, batch_size=batch_size, batch_idx=batch_idx)
-            self.evaluate(text, mode='noclip', background=background, batch_size=batch_size, batch_idx=batch_idx)
+            self.evaluate(text, lyrics, mode='lyrics', background=background, test=True, batch_idx=batch_idx)
+            self.evaluate(text, audio, mode='audio', background=background, test=True, batch_idx=batch_idx)
+            self.evaluate(text, mode='noclip', background=background, test=True, batch_idx=batch_idx)
+
+    def on_test_epoch_end(self):
+        self.log("FAD_lyrics_test", self.frechet_lyrics.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log("FAD_audio_test", self.frechet_audio.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log("FAD_noclip_test", self.frechet_noclip.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
+
+        self.frechet_lyrics.reset()
+        self.frechet_audio.reset()
+        self.frechet_noclip.reset()
 
 
     def configure_optimizers(self):
