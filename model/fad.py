@@ -3,39 +3,54 @@ Adapted from https://github.com/gudgud96/frechet-audio-distance
 """
 import os
 
+import tensorflow_hub as hub
 import torch
 import torchaudio.transforms as T
-from torch import nn
 from scipy.linalg import sqrtm
+from torch import nn
 from torchmetrics import Metric
 from tqdm import tqdm
 
 SAMPLE_RATE = 16000
 
 class FAD(Metric):
-    def __init__(self, use_pca=False, use_activation=False, verbose=False):
+    def __init__(self, use_pca=False, use_activation=False, verbose=False, model="vggish"):
         super().__init__()
-        self.__get_model(use_pca=use_pca, use_activation=use_activation)
+        self.__get_model(model, use_pca=use_pca, use_activation=use_activation)
         self.verbose = verbose
         self.add_state("embds_lst", [], dist_reduce_fx="cat")
     
-    def __get_model(self, use_pca=False, use_activation=False):
+    def __get_model(self, model, use_pca=False, use_activation=False):
         """
         Params:
         -- x   : Either 
             (i) a string which is the directory of a set of audio files, or
             (ii) a np.ndarray of shape (num_samples, sample_length)
         """
-        self.model = torch.hub.load('harritaylor/torchvggish', 'vggish')
-        if not use_pca:
-            self.model.postprocess = False
-        if not use_activation:
-            self.model.embeddings = nn.Sequential(*list(self.model.embeddings.children())[:-1])
-        self.model.eval()
-    
+        self.name = model
+        # VGGish model
+        if model == 'vggish':
+            self.model = torch.hub.load('harritaylor/torchvggish', 'vggish')
+            if not use_pca:
+                self.model.postprocess = False
+            if not use_activation:
+                self.model.embeddings = nn.Sequential(*list(self.model.embeddings.children())[:-1])
+            self.model.eval()
+
+        # Trill model
+        elif model == 'trill':
+            self.model = hub.load("https://tfhub.dev/google/nonsemantic-speech-benchmark/trill/3")
+
+        # YAMNet model
+        elif model == 'yamnet':
+            self.model = hub.load('https://tfhub.dev/google/yamnet/1')
+
+        else:
+            raise ValueError(f'Specified model "{model}" is not available for evaluation. Try vggish/trill/yamnet.')
+
     def get_embeddings(self, x, sr=SAMPLE_RATE):
         """
-        Get embeddings using VGGish model.
+        Get embeddings using VGGish, Trill or YAMNet model.
         Params:
         -- x    : Either 
             (i) a string which is the directory of a set of audio files, or
@@ -43,14 +58,24 @@ class FAD(Metric):
         -- sr   : Sampling rate, if x is a list of audio samples. Default value is 16000.
         """
         embd_lst = []
+
         for audio in tqdm(x, disable=(not self.verbose)):
-            embd = self.model.forward(audio, sr)
-            embd = embd.clone().detach()
+            if self.name == 'vggish':
+                embd = self.model.forward(audio, sr).clone().detach()
+            elif self.name == 'trill':
+                embd = self.model(samples=audio, sample_rate=sr)['embedding'] #pre-ReLU output of the first 512-depth convolutional layer (no activation)
+                embd = torch.tensor(embd.numpy()).detach()
+            elif self.name == 'yamnet':
+                _, embd, _ = self.model(audio)
+                embd = torch.tensor(embd.numpy()).detach()
+            else:
+                raise ValueError(f'Specified model "{self.name}" is not available for evaluation. Try vggish/trill/yamnet.')
+
             embd_lst.append(embd)
         return torch.cat(embd_lst, dim=0)
     
     def calculate_embd_statistics(self, embd_lst):
-        if isinstance(embd_lst, list):
+        if isinstance(embd_lst, list) or isinstance(embd_lst, tuple):
             embd_lst = torch.cat(embd_lst, dim=0)
         mu = torch.mean(embd_lst, dim=0)
         sigma = torch.cov(embd_lst.T)
@@ -95,7 +120,7 @@ class FAD(Metric):
         covmean, _ = sqrtm((sigma1 @ sigma2).cpu().float(), disp=False)
         covmean = torch.tensor(covmean)
         if not torch.isfinite(covmean).all():
-            msg = ('fid calculation produces singular product; '
+            msg = ('FAD calculation produces singular product; '
                 'adding %s to diagonal of cov estimates') % eps
             print(msg)
             offset = torch.eye(sigma1.shape[0]) * eps
@@ -116,15 +141,16 @@ class FAD(Metric):
     
     
     def calculate_embd_statistics_background(self, background=None, save_path=".tmp/"):
-        save_path = os.path.join(save_path, "background_statistics.ptc")
+        save_path = os.path.join(save_path, f"background_statistics_{self.name}.ptc")
+        
         if os.path.exists(save_path):
             return torch.load(save_path)
         
-        if background:
+        elif background:
             resample = T.Resample(48_000, SAMPLE_RATE)
             embds_background = self.get_embeddings([torch.mean(resample(sample.detach().squeeze()), dim=0).cpu().numpy()  for sample in tqdm(background, disable=(not self.verbose))])
             if len(embds_background) == 0:
-                print("[Frechet Audio Distance] background set dir is empty, exitting...")
+                print("[Frechet Audio Distance] background set is empty, exitting...")
                 return -1
             
             background_statistics = self.calculate_embd_statistics(embds_background)
