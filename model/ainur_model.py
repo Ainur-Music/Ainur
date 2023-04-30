@@ -1,5 +1,11 @@
 import os
 import signal
+import warnings
+
+warnings.simplefilter(action='ignore', category=FutureWarning)
+import logging
+
+logging.getLogger("transformers.modeling_utils").setLevel(logging.ERROR)
 
 import comet_ml
 import lightning as L
@@ -9,6 +15,7 @@ import torchaudio
 from audio_diffusion_pytorch import (DiffusionModel, UNetV0, VDiffusion,
                                      VSampler)
 from autoencoder import LitDAE
+from c3 import C3
 from clip import CLIP
 from data.dataset import get_dataset
 from ema import EMA
@@ -128,8 +135,8 @@ class Ainur(L.LightningModule):
                 self.logger.experiment.log_audio(os.path.join(tmp_dir, f"original_{batch_idx}.wav"))
 
                 # Compute fad and log audio
-                self.evaluate(text, lyrics, mode='lyrics', background=background, batch_idx=batch_idx)
-                self.evaluate(text, audio, mode='audio', background=background, batch_idx=batch_idx)
+                self.evaluate(text, lyrics=lyrics, mode='lyrics', background=background, batch_idx=batch_idx)
+                self.evaluate(text, audio=audio, mode='audio', background=background, batch_idx=batch_idx)
                 self.evaluate(text, mode='noclip', background=background, batch_idx=batch_idx)
 
     def on_validation_epoch_end(self):
@@ -142,8 +149,24 @@ class Ainur(L.LightningModule):
             self.frechet_noclip.reset()
 
 
+    def set_test_metrics(self):
+        # C3 metric
+        self.c3= C3(self.clip)
+        # FAD Trill model
+        self.fad_lyrics_trill = FAD(model='trill')
+        self.fad_audio_trill = FAD(model='trill')
+        self.fad_noclip_trill = FAD(model='trill')
+        # FAD YAMNet model
+        self.fad_lyrics_yamnet = FAD(model='yamnet')
+        self.fad_audio_yamnet = FAD(model='yamnet')
+        self.fad_noclip_yamnet = FAD(model='yamnet')
+
     def test_step(self, batch, batch_idx):
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        
+        # Activate metrics for testing
+        self.set_test_metrics()
+
         audio, text, lyrics = batch
         audio = audio.to(device)
         text = text
@@ -155,7 +178,10 @@ class Ainur(L.LightningModule):
             os.mkdir(tmp_dir)
 
         # Check if the statistics are already computed
-        if not os.path.exists(os.path.join(tmp_dir, "background_statistics.ptc")):
+        if not (
+            os.path.exists(os.path.join(tmp_dir, "background_statistics_vggish.ptc")) and 
+            os.path.exists(os.path.join(tmp_dir, "background_statistics_trill.ptc")) and
+            os.path.exists(os.path.join(tmp_dir, "background_statistics_yamnet.ptc"))):
             train_dataset , *_ = random_split(self.dataset, [0.98, 0.005, 0.015], torch.Generator().manual_seed(42))
             background, _ = random_split(train_dataset, [0.1, 0.9], torch.Generator().manual_seed(42))
             background = map(lambda item : item[0], background)
@@ -168,18 +194,35 @@ class Ainur(L.LightningModule):
             self.logger.experiment.log_audio(os.path.join(tmp_dir, f"original_{batch_idx}.wav"))
 
             # Compute fad and log audio
-            self.evaluate(text, lyrics, mode='lyrics', background=background, test=True, batch_idx=batch_idx)
-            self.evaluate(text, audio, mode='audio', background=background, test=True, batch_idx=batch_idx)
-            self.evaluate(text, mode='noclip', background=background, test=True, batch_idx=batch_idx)
+            self.evaluate(text, lyrics=lyrics, mode='lyrics', background=background, test=True, batch_idx=batch_idx, device=device)
+            self.evaluate(text, audio=audio, mode='audio', background=background, test=True, batch_idx=batch_idx, device=device)
+            self.evaluate(text, mode='noclip', background=background, test=True, batch_idx=batch_idx, device=device)
 
     def on_test_epoch_end(self):
-        self.log("FAD_lyrics_test", self.frechet_lyrics.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
-        self.log("FAD_audio_test", self.frechet_audio.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
-        self.log("FAD_noclip_test", self.frechet_noclip.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log("FAD_VGGish_lyrics", self.frechet_lyrics.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log("FAD_VGGish_audio", self.frechet_audio.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log("FAD_VGGish_noclip", self.frechet_noclip.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
+
+        self.log("FAD_Trill_lyrics", self.fad_lyrics_trill.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log("FAD_Trill_audio", self.fad_audio_trill.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log("FAD_Trill_noclip", self.fad_noclip_trill.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
+
+        self.log("FAD_YAMNet_lyrics", self.fad_lyrics_yamnet.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log("FAD_YAMNet_audio", self.fad_audio_yamnet.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log("FAD_YAMNet_noclip", self.fad_noclip_yamnet.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
+
+        self.log("C3", self.c3.compute(), on_epoch=True, prog_bar=True, sync_dist=True )
 
         self.frechet_lyrics.reset()
         self.frechet_audio.reset()
         self.frechet_noclip.reset()
+        self.fad_lyrics_trill.compute()
+        self.fad_audio_trill.compute()
+        self.fad_noclip_trill.compute()
+        self.fad_lyrics_yamnet.compute()
+        self.fad_audio_yamnet.compute()
+        self.fad_noclip_yamnet.compute()
+        self.c3.reset()
 
 
     def configure_optimizers(self):
@@ -202,16 +245,28 @@ class Ainur(L.LightningModule):
     
 
     @torch.no_grad()
-    def evaluate(self, text, conditioning=None, mode='lyrics', background=None, test=False, tmp_dir=".tmp", batch_idx=None):
+    def evaluate(self, text, lyrics=None, audio=None, mode='lyrics', background=None, test=False, tmp_dir=".tmp", batch_idx=None, device=torch.device('cpu')):
         if mode == 'lyrics':
-            evaluation = self.sample_audio(lyrics=conditioning, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
+            evaluation = self.sample_audio(lyrics=lyrics, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).to(device)
             self.frechet_lyrics(evaluation, target=background)
+            if test:
+                self.c3(evaluation, lyrics)
+                self.fad_lyrics_trill(evaluation, target=background)
+                self.fad_lyrics_yamnet(evaluation, target=background)
+
         elif mode == 'audio':
-            evaluation = self.sample_audio(audio=conditioning, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
+            evaluation = self.sample_audio(audio=audio, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).to(device)
             self.frechet_audio(evaluation, target=background)
-        elif (conditioning is None) and (mode == 'noclip'):
-            evaluation = self.sample_audio(n_samples=len(text), text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).cpu()
+            if test:
+                self.fad_audio_trill(evaluation, target=background)
+                self.fad_audio_yamnet(evaluation, target=background)
+
+        elif (lyrics is None) and (audio is None) and (mode == 'noclip'):
+            evaluation = self.sample_audio(n_samples=len(text), text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).to(device)
             self.frechet_noclip(evaluation, target=background)
+            if test:
+                self.fad_noclip_trill(evaluation, target=background)
+                self.fad_noclip_yamnet(evaluation, target=background)
         else:
             print(f"Unknown mode='{mode}', expected one of 'lyrics', 'audio', 'noclip'.")
             return -1
@@ -221,7 +276,7 @@ class Ainur(L.LightningModule):
                                      48_000)
         self.logger.experiment.log_audio(os.path.join(tmp_dir, 
                                                       f"sample_{mode}{'_test' if test else ''}{f'_{batch_idx}' if batch_idx is not None else ''}.wav"))
-        self.logger.experiment.log_text(f"{f'batch_idx={batch_idx}_' if batch_idx is not None else ''}{text[0]}{f'_lyrics: {conditioning[0]}' if mode == 'lyrics' else ''}")
+        self.logger.experiment.log_text(f"{f'batch_idx={batch_idx}_' if batch_idx is not None else ''}{text[0]}{f'_lyrics: {lyrics[0]}' if mode == 'lyrics' else ''}")
         del evaluation
         
 
@@ -270,9 +325,8 @@ if __name__ == "__main__":
     parser.add_argument("--clip_checkpoint_path", type=str, default="/home/gconcialdi/ainur/runs/clip/checkpoints/clip.ckpt")
     parser.add_argument("--default_root_dir", type=str, default="/home/gconcialdi/ainur/runs/")
     parser.add_argument("--checkpoint_every_n_epoch", type=int, default=10)
-    parser.add_argument("--gradient_clip", type=float, default=1)
+    parser.add_argument("--gradient_clip", type=float, default=5)
     parser.add_argument("--sanity_steps", type=int, default=0)
-
 
 
     # Hyperparameters for the model
@@ -293,7 +347,7 @@ if __name__ == "__main__":
         api_key="9LmOAqSG4omncUN3QT42iQoqb",
         project_name="ainur",
         workspace="gio99c",
-        experiment_name="ainur_v4",
+        experiment_name="ainur_v5",
         offline=False
         )
 
@@ -310,7 +364,7 @@ if __name__ == "__main__":
                   checkpoint_every_n_epoch=args.checkpoint_every_n_epoch
                   )
 
-    checkpoint_callback = ModelCheckpoint(dirpath=os.path.join(args.default_root_dir, "ainur_model_v4/checkpoints/"), monitor="loss_epoch", save_last=True)
+    checkpoint_callback = ModelCheckpoint(dirpath=os.path.join(args.default_root_dir, "ainur_model_v5/checkpoints/"), monitor="loss_epoch", save_last=True)
     accumulator = GradientAccumulationScheduler(scheduling={0: 4, 300: 2, 500: 1})
     ema = EMA(0.999)
     trainer = Trainer(max_epochs=args.epochs,
