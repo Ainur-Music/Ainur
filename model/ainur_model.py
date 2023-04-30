@@ -62,6 +62,7 @@ class Ainur(L.LightningModule):
         self.num_steps = num_steps
         self.embedding_scale = embedding_scale
         self.checkpoint_every_n_epoch = checkpoint_every_n_epoch
+        self.frechet_both = FAD()
         self.frechet_lyrics = FAD()
         self.frechet_audio = FAD()
         self.frechet_noclip = FAD()
@@ -91,16 +92,18 @@ class Ainur(L.LightningModule):
 
     def training_step(self, batch, batch_idx, **kwargs):
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        audio, text, _ = batch
+        audio, text, lyrics = batch
         audio = audio.to(device)
-        latent = self.clip.encode_audio(audio).unsqueeze(1).to(device) # b x 1 x 512
+        clasp_lyrics = self.clip.encode_lyrics(lyrics).unsqueeze(1).to(device) # b x 1 x 512
+        clasp_audio = self.clip.encode_audio(audio).unsqueeze(1).to(device) # b x 1 x 512
+        embedding = F.pad(torch.cat((clasp_lyrics, clasp_audio), dim=1), (0, 768-clasp_lyrics.shape[-1])) # b x 2 x 768
         encoded_audio = self.autoencoder.encode(audio).to(device)
         
         # Compute diffusion loss
         batch_size = audio.shape[0]
         loss = self.diffusion_model(encoded_audio, 
                                     text=text, 
-                                    embedding=F.pad(latent, (0, 768-512)), 
+                                    embedding=embedding, 
                                     embedding_mask_proba=0.1,
                                     **kwargs)
         with torch.no_grad():
@@ -135,15 +138,18 @@ class Ainur(L.LightningModule):
                 self.logger.experiment.log_audio(os.path.join(tmp_dir, f"original_{batch_idx}.wav"))
 
                 # Compute fad and log audio
+                self.evaluate(text, lyrics=lyrics, audio=audio, mode='both', background=background, batch_idx=batch_idx)
                 self.evaluate(text, lyrics=lyrics, mode='lyrics', background=background, batch_idx=batch_idx)
                 self.evaluate(text, audio=audio, mode='audio', background=background, batch_idx=batch_idx)
                 self.evaluate(text, mode='noclip', background=background, batch_idx=batch_idx)
 
     def on_validation_epoch_end(self):
         if self.current_epoch % self.checkpoint_every_n_epoch == 0:
+            self.log("FAD_both", self.frechet_both.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
             self.log("FAD_lyrics", self.frechet_lyrics.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
             self.log("FAD_audio", self.frechet_audio.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
             self.log("FAD_noclip", self.frechet_noclip.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
+            self.frechet_both.reset()
             self.frechet_lyrics.reset()
             self.frechet_audio.reset()
             self.frechet_noclip.reset()
@@ -151,12 +157,15 @@ class Ainur(L.LightningModule):
 
     def set_test_metrics(self):
         # C3 metric
-        self.c3= C3(self.clip)
+        self.c3_both = C3(self.clip)
+        self.c3_lyrics = C3(self.clip)
         # FAD Trill model
+        self.fad_both_trill = FAD(model='trill')
         self.fad_lyrics_trill = FAD(model='trill')
         self.fad_audio_trill = FAD(model='trill')
         self.fad_noclip_trill = FAD(model='trill')
         # FAD YAMNet model
+        self.fad_both_yamnet = FAD(model='yamnet')
         self.fad_lyrics_yamnet = FAD(model='yamnet')
         self.fad_audio_yamnet = FAD(model='yamnet')
         self.fad_noclip_yamnet = FAD(model='yamnet')
@@ -194,35 +203,44 @@ class Ainur(L.LightningModule):
             self.logger.experiment.log_audio(os.path.join(tmp_dir, f"original_{batch_idx}.wav"))
 
             # Compute fad and log audio
+            self.evaluate(text, lyrics=lyrics, audio=audio, mode='both', background=background, test=True, batch_idx=batch_idx, device=device)
             self.evaluate(text, lyrics=lyrics, mode='lyrics', background=background, test=True, batch_idx=batch_idx, device=device)
             self.evaluate(text, audio=audio, mode='audio', background=background, test=True, batch_idx=batch_idx, device=device)
             self.evaluate(text, mode='noclip', background=background, test=True, batch_idx=batch_idx, device=device)
 
     def on_test_epoch_end(self):
+        self.log("FAD_VGGish_both", self.frechet_both.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
         self.log("FAD_VGGish_lyrics", self.frechet_lyrics.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
         self.log("FAD_VGGish_audio", self.frechet_audio.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
         self.log("FAD_VGGish_noclip", self.frechet_noclip.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
 
+        self.log("FAD_Trill_both", self.fad_both_trill.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
         self.log("FAD_Trill_lyrics", self.fad_lyrics_trill.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
         self.log("FAD_Trill_audio", self.fad_audio_trill.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
         self.log("FAD_Trill_noclip", self.fad_noclip_trill.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
 
+        self.log("FAD_YAMNet_both", self.fad_both_yamnet.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
         self.log("FAD_YAMNet_lyrics", self.fad_lyrics_yamnet.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
         self.log("FAD_YAMNet_audio", self.fad_audio_yamnet.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
         self.log("FAD_YAMNet_noclip", self.fad_noclip_yamnet.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
 
-        self.log("C3", self.c3.compute(), on_epoch=True, prog_bar=True, sync_dist=True )
+        self.log("C3_both", self.c3_both.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
+        self.log("C3_lyrics", self.c3_lyrics.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
 
+        self.frechet_both.reset()
         self.frechet_lyrics.reset()
         self.frechet_audio.reset()
         self.frechet_noclip.reset()
+        self.fad_both_trill.compute()
         self.fad_lyrics_trill.compute()
         self.fad_audio_trill.compute()
         self.fad_noclip_trill.compute()
+        self.fad_both_yamnet.compute()
         self.fad_lyrics_yamnet.compute()
         self.fad_audio_yamnet.compute()
         self.fad_noclip_yamnet.compute()
-        self.c3.reset()
+        self.c3_both.reset()
+        self.c3_lyrics.reset()
 
 
     def configure_optimizers(self):
@@ -246,11 +264,19 @@ class Ainur(L.LightningModule):
 
     @torch.no_grad()
     def evaluate(self, text, lyrics=None, audio=None, mode='lyrics', background=None, test=False, tmp_dir=".tmp", batch_idx=None, device=torch.device('cpu')):
-        if mode == 'lyrics':
+        if mode == 'both':
+            evaluation = self.sample_audio(lyrics=lyrics, audio=audio, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).to(device)
+            self.frechet_both(evaluation, target=background)
+            if test:
+                self.c3_both(evaluation, lyrics)
+                self.fad_both_trill(evaluation, target=background)
+                self.fad_both_yamnet(evaluation, target=background)
+
+        elif mode == 'lyrics':
             evaluation = self.sample_audio(lyrics=lyrics, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).to(device)
             self.frechet_lyrics(evaluation, target=background)
             if test:
-                self.c3(evaluation, lyrics)
+                self.c3_lyrics(evaluation, lyrics)
                 self.fad_lyrics_trill(evaluation, target=background)
                 self.fad_lyrics_yamnet(evaluation, target=background)
 
@@ -268,7 +294,7 @@ class Ainur(L.LightningModule):
                 self.fad_noclip_trill(evaluation, target=background)
                 self.fad_noclip_yamnet(evaluation, target=background)
         else:
-            print(f"Unknown mode='{mode}', expected one of 'lyrics', 'audio', 'noclip'.")
+            print(f"Unknown mode='{mode}', expected one of 'both', 'lyrics', 'audio', 'noclip'.")
             return -1
 
         torchaudio.save(os.path.join(tmp_dir, f"sample_{mode}{'_test' if test else ''}{f'_{batch_idx}' if batch_idx is not None else ''}.wav"), 
@@ -276,7 +302,7 @@ class Ainur(L.LightningModule):
                                      48_000)
         self.logger.experiment.log_audio(os.path.join(tmp_dir, 
                                                       f"sample_{mode}{'_test' if test else ''}{f'_{batch_idx}' if batch_idx is not None else ''}.wav"))
-        self.logger.experiment.log_text(f"{f'batch_idx={batch_idx}_' if batch_idx is not None else ''}{text[0]}{f'_lyrics: {lyrics[0]}' if mode == 'lyrics' else ''}")
+        self.logger.experiment.log_text(f"{f'batch_idx={batch_idx}_' if batch_idx is not None else ''}{text[0]}{f'_lyrics: {lyrics[0]}' if mode in ['both','lyrics'] else ''}")
         del evaluation
         
 
@@ -286,19 +312,29 @@ class Ainur(L.LightningModule):
         if (lyrics is not None) or (audio is not None):
             n_samples = len(lyrics) if lyrics else audio.shape[0]
 
-        if lyrics is not None:
-            latent = F.pad(self.clip.encode_lyrics(lyrics).unsqueeze(1).to(device), (0, 768-512)) # conditioning on lyrics
+        # Conditioning on both lyrics and audio
+        if (lyrics is not None) and (audio is not None):
+            clasp_lyrics = F.pad(self.clip.encode_lyrics(lyrics).unsqueeze(1).to(device), (0, 768-512))
+            clasp_audio = F.pad(self.clip.encode_audio(audio).unsqueeze(1).to(device), (0, 768-512))
+            embedding = torch.cat((clasp_lyrics, clasp_audio), dim=1)
+        # Conditioning on lyrics
+        elif lyrics is not None:
+            embedding = F.pad(self.clip.encode_lyrics(lyrics).unsqueeze(1).to(device), (0, 768-512))
+        # Conditioning on audio
         elif audio is not None:
-            latent = F.pad(self.clip.encode_audio(audio).unsqueeze(1).to(device), (0, 768-512)) # conditioning on audio
+            clasp_audio = F.pad(self.clip.encode_audio(audio).unsqueeze(1).to(device), (0, 768-512))
+            embedding = torch.cat((torch.zeros_like(clasp_audio).to(device), clasp_audio), dim=1)
+        # No CLASP conditioning
         else:
-            latent = None # no clip conditioning
+            embedding = None # no clasp conditioning
+
 
         # Create the noise tensor
         noise = torch.randn(n_samples, self.in_channels, self.sample_length // 2**self.latent_factor).to(device)
 
 
         # Decode by sampling while conditioning on latent channels
-        return self.diffusion_model.sample(noise, embedding=latent, **kwargs).to(device)
+        return self.diffusion_model.sample(noise, embedding=embedding, **kwargs).to(device)
     
 
     @torch.no_grad()
