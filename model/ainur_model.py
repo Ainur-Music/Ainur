@@ -9,6 +9,7 @@ logging.getLogger("transformers.modeling_utils").setLevel(logging.ERROR)
 
 import comet_ml
 import lightning as L
+import numpy as np
 import torch
 import torch.nn.functional as F
 import torchaudio
@@ -35,7 +36,8 @@ def select(key, **kwargs):
     return value
 
 class Ainur(L.LightningModule):
-    def __init__(self, 
+    def __init__(self,
+                 inject_depth,
                  dataset_path, 
                  crop=2**20, 
                  in_channels=32, 
@@ -50,6 +52,7 @@ class Ainur(L.LightningModule):
                  checkpoint_every_n_epoch=10):
         super(Ainur, self).__init__()
         self.save_hyperparameters()
+        self.inject_depth = inject_depth
         self.dataset = get_dataset(dataset_path, crop=crop)
         self.dataset_path = dataset_path
         self.crop = crop
@@ -71,6 +74,8 @@ class Ainur(L.LightningModule):
         self.autoencoder = LitDAE(dataset_path)
         self.autoencoder.eval()
 
+        context_channels = [0] * len(channels)
+        context_channels[inject_depth] = 1 ## encoder.out_channels
 
         self.diffusion_model = DiffusionModel(
             net_t=UNetV0,
@@ -83,9 +88,10 @@ class Ainur(L.LightningModule):
             attention_features=64, # U-Net: number of attention features per attention item
             use_text_conditioning=True, # U-Net: enables text conditioning (default T5-base)
             use_embedding_cfg=True, # U-Net: enables classifier free guidance
-            embedding_max_length=66, # U-Net: text embedding maximum length (default for T5-base)
+            embedding_max_length=64, # U-Net: text embedding maximum length (default for T5-base)
             embedding_features=768, # U-Net: text embedding features (default for T5-base)
             cross_attentions=[1, 1, 1, 1, 1, 1], # U-Net: cross-attention enabled/disabled at each layer
+            context_channels=context_channels, # important to inject the clip embeddings
             diffusion_t=VDiffusion, 
             sampler_t=VSampler)
         
@@ -95,15 +101,19 @@ class Ainur(L.LightningModule):
         audio, text, lyrics = batch
         audio = audio.to(device)
         clasp_lyrics = self.clip.encode_lyrics(lyrics).unsqueeze(1).to(device) # b x 1 x 512
-        clasp_audio = self.clip.encode_audio(audio).unsqueeze(1).to(device) # b x 1 x 512
-        embedding = F.pad(torch.cat((clasp_lyrics, clasp_audio), dim=1), (0, 768-clasp_lyrics.shape[-1])) # b x 2 x 768
+        channels = [None] * self.inject_depth + [clasp_lyrics]
+        #clasp_audio = self.clip.encode_audio(audio).unsqueeze(1).to(device) # b x 1 x 512
+        #embedding = F.pad(torch.cat((clasp_lyrics, clasp_audio), dim=1), (0, 768-clasp_lyrics.shape[-1])) # b x 2 x 768
+        
+        
         encoded_audio = self.autoencoder.encode(audio).to(device)
         
         # Compute diffusion loss
         batch_size = audio.shape[0]
         loss = self.diffusion_model(encoded_audio, 
-                                    text=text, 
-                                    embedding=embedding, 
+                                    text=text,
+                                    channels=channels,
+                                    #embedding=embedding, 
                                     embedding_mask_proba=0.1,
                                     **kwargs)
         with torch.no_grad():
@@ -312,29 +322,31 @@ class Ainur(L.LightningModule):
         if (lyrics is not None) or (audio is not None):
             n_samples = len(lyrics) if lyrics else audio.shape[0]
 
-        # Conditioning on both lyrics and audio
-        if (lyrics is not None) and (audio is not None):
-            clasp_lyrics = F.pad(self.clip.encode_lyrics(lyrics).unsqueeze(1).to(device), (0, 768-512))
-            clasp_audio = F.pad(self.clip.encode_audio(audio).unsqueeze(1).to(device), (0, 768-512))
-            embedding = torch.cat((clasp_lyrics, clasp_audio), dim=1)
+        ## Conditioning on both lyrics and audio
+        #if (lyrics is not None) and (audio is not None):
+        #    clasp_lyrics = F.pad(self.clip.encode_lyrics(lyrics).unsqueeze(1).to(device), (0, 768-512))
+        #    clasp_audio = F.pad(self.clip.encode_audio(audio).unsqueeze(1).to(device), (0, 768-512))
+        #    embedding = torch.cat((clasp_lyrics, clasp_audio), dim=1)
         # Conditioning on lyrics
-        elif lyrics is not None:
-            embedding = F.pad(self.clip.encode_lyrics(lyrics).unsqueeze(1).to(device), (0, 768-512))
+        if lyrics is not None:
+            latent = self.clip.encode_lyrics(lyrics).unsqueeze(1).to(device)
         # Conditioning on audio
         elif audio is not None:
-            clasp_audio = F.pad(self.clip.encode_audio(audio).unsqueeze(1).to(device), (0, 768-512))
-            embedding = torch.cat((torch.zeros_like(clasp_audio).to(device), clasp_audio), dim=1)
+            latent = self.clip.encode_audio(audio).unsqueeze(1).to(device)
         # No CLASP conditioning
         else:
-            embedding = None # no clasp conditioning
+            latent = torch.randn(n_samples, 1, 2**self.latent_factor).to(device)  # no clip conditioning
 
 
         # Create the noise tensor
         noise = torch.randn(n_samples, self.in_channels, self.sample_length // 2**self.latent_factor).to(device)
 
+        # Compute context from lyrics embedding
+        channels = [None] * self.inject_depth + [latent]
+
 
         # Decode by sampling while conditioning on latent channels
-        return self.diffusion_model.sample(noise, embedding=embedding, **kwargs).to(device)
+        return self.diffusion_model.sample(noise, channels=channels, **kwargs).to(device)
     
 
     @torch.no_grad()
@@ -387,8 +399,9 @@ if __name__ == "__main__":
         offline=False
         )
 
-
-    ainur = Ainur( 
+    inject_depth = int(np.log2(args.crop / 2**18))
+    ainur = Ainur(
+                  inject_depth=inject_depth,
                   crop=args.crop, 
                   dataset_path=args.dataset_path, 
                   num_workers=args.num_workers, 
