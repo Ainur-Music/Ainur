@@ -14,10 +14,11 @@ from tqdm import tqdm
 SAMPLE_RATE = 16000
 
 class FAD(Metric):
-    def __init__(self, use_pca=False, use_activation=False, verbose=False, model="vggish"):
+    def __init__(self, use_pca=False, use_activation=False, verbose=False, model="vggish", path=".tmp/"):
         super().__init__()
         self.__get_model(model, use_pca=use_pca, use_activation=use_activation)
         self.verbose = verbose
+        self.path = path
         self.add_state("embds_lst", [], dist_reduce_fx="cat")
     
     def __get_model(self, model, use_pca=False, use_activation=False):
@@ -140,8 +141,8 @@ class FAD(Metric):
                 + torch.trace(sigma2.float()) - 2 * tr_covmean)
     
     
-    def calculate_embd_statistics_background(self, background=None, save_path=".tmp/"):
-        save_path = os.path.join(save_path, f"background_statistics_{self.name}.ptc")
+    def calculate_embd_statistics_background(self, background=None):
+        save_path = os.path.join(self.path, f"background_statistics_{self.name}.ptc")
         
         if os.path.exists(save_path):
             return torch.load(save_path)
