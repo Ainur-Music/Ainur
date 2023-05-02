@@ -97,33 +97,25 @@ class Ainur(L.LightningModule):
         
 
     def training_step(self, batch, batch_idx, **kwargs):
-        print(f"Start! Index: {batch_idx}")
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         audio, text, lyrics = batch
-        print("Audio to device")
         audio = audio.to(device)
-        print("Clasp lyrics to device")
         clasp_lyrics = self.clip.encode_lyrics(lyrics).unsqueeze(1).to(device) # b x 1 x 512
         channels = [None] * self.inject_depth + [clasp_lyrics]
         #clasp_audio = self.clip.encode_audio(audio).unsqueeze(1).to(device) # b x 1 x 512
         #embedding = F.pad(torch.cat((clasp_lyrics, clasp_audio), dim=1), (0, 768-clasp_lyrics.shape[-1])) # b x 2 x 768
         
-        print("Encoded audio to device")
+        
         encoded_audio = self.autoencoder.encode(audio).to(device)
         
         # Compute diffusion loss
         batch_size = audio.shape[0]
-        print("Diffusion...")
         loss = self.diffusion_model(encoded_audio, 
                                     text=text,
                                     channels=channels,
                                     #embedding=embedding, 
                                     embedding_mask_proba=0.1,
                                     **kwargs)
-        print("Deleting stuff...")
-        del audio
-        del clasp_lyrics
-        del encoded_audio
         with torch.no_grad():
             # Log loss
             self.log('loss', loss, on_epoch=True, prog_bar=True, batch_size=batch_size, sync_dist=True)
