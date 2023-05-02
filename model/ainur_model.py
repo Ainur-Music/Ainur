@@ -373,7 +373,7 @@ if __name__ == "__main__":
     parser.add_argument("--clip_checkpoint_path", type=str, default="/home/gconcialdi/ainur/runs/clip/checkpoints/clip.ckpt")
     parser.add_argument("--default_root_dir", type=str, default="/home/gconcialdi/ainur/runs/")
     parser.add_argument("--checkpoint_every_n_epoch", type=int, default=10)
-    parser.add_argument("--gradient_clip", type=float, default=5)
+    parser.add_argument("--gradient_clip", type=float, default=5.0)
     parser.add_argument("--sanity_steps", type=int, default=0)
 
 
@@ -414,7 +414,7 @@ if __name__ == "__main__":
                   )
 
     checkpoint_callback = ModelCheckpoint(dirpath=os.path.join(args.default_root_dir, "ainur_model_v5/checkpoints/"), monitor="loss_epoch", save_last=True)
-    accumulator = GradientAccumulationScheduler(scheduling={0: 4, 300: 2, 500: 1})
+    accumulator = GradientAccumulationScheduler(scheduling={0: 2, 300: 1})
     ema = EMA(0.999)
     trainer = Trainer(max_epochs=args.epochs,
                       logger=logger,
