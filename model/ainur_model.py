@@ -175,13 +175,11 @@ class Ainur(L.LightningModule):
         self.fad_noclip_yamnet = FAD(model='yamnet', path=self.evaluation_path)
 
     def test_step(self, batch, batch_idx):
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        
         # Activate metrics for testing
         self.set_test_metrics()
 
         audio, text, lyrics = batch
-        audio = audio.to(device)
+        audio = audio.cpu()
         text = text
         lyrics = lyrics
 
@@ -206,9 +204,9 @@ class Ainur(L.LightningModule):
             self.logger.experiment.log_audio(os.path.join(self.evaluation_path, f"original_{batch_idx}.wav"))
 
             # Compute fad and log audio
-            self.evaluate(text, lyrics=lyrics, mode='lyrics', background=background, test=True, batch_idx=batch_idx, device=device)
-            self.evaluate(text, audio=audio, mode='audio', background=background, test=True, batch_idx=batch_idx, device=device)
-            self.evaluate(text, mode='noclip', background=background, test=True, batch_idx=batch_idx, device=device)
+            self.evaluate(text, lyrics=lyrics, mode='lyrics', background=background, test=True, batch_idx=batch_idx)
+            self.evaluate(text, audio=audio, mode='audio', background=background, test=True, batch_idx=batch_idx)
+            self.evaluate(text, mode='noclip', background=background, test=True, batch_idx=batch_idx)
 
     def on_test_epoch_end(self):
         self.log("FAD_VGGish_lyrics", self.frechet_lyrics.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
