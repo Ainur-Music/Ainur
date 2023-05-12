@@ -204,7 +204,6 @@ class Ainur(L.LightningModule):
             self.logger.experiment.log_audio(os.path.join(self.evaluation_path, f"original_{batch_idx}.wav"))
 
             # Compute fad and log audio
-            print(torch.cuda.memory_allocated(device=torch.device('cuda')))
             self.evaluate(text, lyrics=lyrics, mode='lyrics', background=background, test=True, batch_idx=batch_idx)
             self.evaluate(text, audio=audio, mode='audio', background=background, test=True, batch_idx=batch_idx)
             self.evaluate(text, mode='noclip', background=background, test=True, batch_idx=batch_idx)
@@ -264,7 +263,7 @@ class Ainur(L.LightningModule):
         #         self.c3_both(evaluation, lyrics)
         #         self.fad_both_trill(evaluation, target=background)
         #         self.fad_both_yamnet(evaluation, target=background)
-        print(torch.cuda.memory_allocated(device=torch.device('cuda')))
+
         if mode == 'lyrics':
             evaluation = self.sample_audio(lyrics=lyrics, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).to(device)
             self.frechet_lyrics(evaluation, target=background)
@@ -304,7 +303,7 @@ class Ainur(L.LightningModule):
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         if (lyrics is not None) or (audio is not None):
             n_samples = len(lyrics) if lyrics else audio.shape[0]
-        print(torch.cuda.memory_allocated(device=torch.device('cuda')))
+
         ## Conditioning on both lyrics and audio
         #if (lyrics is not None) and (audio is not None):
         #    clasp_lyrics = F.pad(self.clip.encode_lyrics(lyrics).unsqueeze(1).to(device), (0, 768-512))
@@ -335,7 +334,6 @@ class Ainur(L.LightningModule):
     @torch.no_grad()
     def sample_audio(self, lyrics=None, audio=None, n_samples=1, **kwargs):
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        print(torch.cuda.memory_allocated(device=torch.device('cuda')))
         samples = self.sample(lyrics=lyrics, audio=audio, n_samples=n_samples, **kwargs).to(device)
         num_steps = select("num_steps", **kwargs)
 
