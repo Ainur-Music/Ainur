@@ -415,4 +415,4 @@ if __name__ == "__main__":
                       plugins=[SLURMEnvironment(requeue_signal=signal.SIGUSR1)],
                       callbacks=[StochasticWeightAveraging(swa_lrs=1e-4), checkpoint_callback, accumulator, ema])
 
-    trainer.test(ainur, ckpt_path=args.checkpoint_path)
+    trainer.fit(ainur, ckpt_path=args.checkpoint_path)
