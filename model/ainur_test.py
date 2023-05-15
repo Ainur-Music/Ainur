@@ -240,7 +240,7 @@ class Ainur(L.LightningModule):
     
     def test_dataloader(self):
         *_, test_dataset = random_split(self.dataset, [0.98, 0.005, 0.015], torch.Generator().manual_seed(42))
-        test_loader = DataLoader(test_dataset, num_workers=self.num_workers, pin_memory=True, persistent_workers=True, batch_size=1, shuffle=False)
+        test_loader = DataLoader(test_dataset, num_workers=self.num_workers, pin_memory=False, batch_size=1, shuffle=False)
         return test_loader
     
     def val_dataloader(self):
