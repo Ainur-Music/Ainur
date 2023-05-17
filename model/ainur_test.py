@@ -390,7 +390,7 @@ if __name__ == "__main__":
                   num_workers=args.num_workers, 
                   batch_size=args.batch_size, 
                   clip_checkpoint_path=args.clip_checkpoint_path,
-                  evaluation_path=os.path.join(args.default_root_dir, args.model_name, "evaluation"),
+                  evaluation_path=os.path.join(args.default_root_dir, args.model_name, "evaluation/test"),
                   sample_length=args.sample_length,
                   num_steps=args.num_steps,
                   embedding_scale=args.embedding_scale,
