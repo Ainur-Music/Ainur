@@ -166,13 +166,13 @@ class Ainur(L.LightningModule):
         # C3 metric
         self.c3 = C3(self.clip)
         # FAD Trill model
-        self.fad_lyrics_trill = FAD(model='trill', path=self.evaluation_path)
-        self.fad_audio_trill = FAD(model='trill', path=self.evaluation_path)
-        self.fad_noclip_trill = FAD(model='trill', path=self.evaluation_path)
-        # FAD YAMNet model
-        self.fad_lyrics_yamnet = FAD(model='yamnet', path=self.evaluation_path)
-        self.fad_audio_yamnet = FAD(model='yamnet', path=self.evaluation_path)
-        self.fad_noclip_yamnet = FAD(model='yamnet', path=self.evaluation_path)
+        # self.fad_lyrics_trill = FAD(model='trill', path=self.evaluation_path)
+        # self.fad_audio_trill = FAD(model='trill', path=self.evaluation_path)
+        # self.fad_noclip_trill = FAD(model='trill', path=self.evaluation_path)
+        # # FAD YAMNet model
+        # self.fad_lyrics_yamnet = FAD(model='yamnet', path=self.evaluation_path)
+        # self.fad_audio_yamnet = FAD(model='yamnet', path=self.evaluation_path)
+        # self.fad_noclip_yamnet = FAD(model='yamnet', path=self.evaluation_path)
 
     def test_step(self, batch, batch_idx):
         # Activate metrics for testing
@@ -213,25 +213,25 @@ class Ainur(L.LightningModule):
         self.log("FAD_VGGish_audio", self.frechet_audio.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
         self.log("FAD_VGGish_noclip", self.frechet_noclip.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
 
-        self.log("FAD_Trill_lyrics", self.fad_lyrics_trill.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
-        self.log("FAD_Trill_audio", self.fad_audio_trill.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
-        self.log("FAD_Trill_noclip", self.fad_noclip_trill.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
+        # self.log("FAD_Trill_lyrics", self.fad_lyrics_trill.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
+        # self.log("FAD_Trill_audio", self.fad_audio_trill.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
+        # self.log("FAD_Trill_noclip", self.fad_noclip_trill.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
 
-        self.log("FAD_YAMNet_lyrics", self.fad_lyrics_yamnet.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
-        self.log("FAD_YAMNet_audio", self.fad_audio_yamnet.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
-        self.log("FAD_YAMNet_noclip", self.fad_noclip_yamnet.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
+        # self.log("FAD_YAMNet_lyrics", self.fad_lyrics_yamnet.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
+        # self.log("FAD_YAMNet_audio", self.fad_audio_yamnet.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
+        # self.log("FAD_YAMNet_noclip", self.fad_noclip_yamnet.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
 
         self.log("C3", self.c3.compute(), on_epoch=True, prog_bar=True, sync_dist=True)
 
         self.frechet_lyrics.reset()
         self.frechet_audio.reset()
         self.frechet_noclip.reset()
-        self.fad_lyrics_trill.compute()
-        self.fad_audio_trill.compute()
-        self.fad_noclip_trill.compute()
-        self.fad_lyrics_yamnet.compute()
-        self.fad_audio_yamnet.compute()
-        self.fad_noclip_yamnet.compute()
+        # self.fad_lyrics_trill.compute()
+        # self.fad_audio_trill.compute()
+        # self.fad_noclip_trill.compute()
+        # self.fad_lyrics_yamnet.compute()
+        # self.fad_audio_yamnet.compute()
+        # self.fad_noclip_yamnet.compute()
         self.c3.reset()
 
 
@@ -269,22 +269,24 @@ class Ainur(L.LightningModule):
             self.frechet_lyrics(evaluation, target=background)
             if test:
                 self.c3(evaluation, lyrics)
-                self.fad_lyrics_trill(evaluation, target=background)
-                self.fad_lyrics_yamnet(evaluation, target=background)
+                # self.fad_lyrics_trill(evaluation, target=background)
+                # self.fad_lyrics_yamnet(evaluation, target=background)
 
         elif mode == 'audio':
             evaluation = self.sample_audio(audio=audio, text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).to(device)
             self.frechet_audio(evaluation, target=background)
             if test:
-                self.fad_audio_trill(evaluation, target=background)
-                self.fad_audio_yamnet(evaluation, target=background)
+                pass
+                # self.fad_audio_trill(evaluation, target=background)
+                # self.fad_audio_yamnet(evaluation, target=background)
 
         elif (lyrics is None) and (audio is None) and (mode == 'noclip'):
             evaluation = self.sample_audio(n_samples=len(text), text=text, embedding_scale=self.embedding_scale, num_steps=self.num_steps).to(device)
             self.frechet_noclip(evaluation, target=background)
             if test:
-                self.fad_noclip_trill(evaluation, target=background)
-                self.fad_noclip_yamnet(evaluation, target=background)
+                pass
+                # self.fad_noclip_trill(evaluation, target=background)
+                # self.fad_noclip_yamnet(evaluation, target=background)
         else:
             print(f"Unknown mode='{mode}', expected one of 'lyrics', 'audio', 'noclip'.")
             return -1
