@@ -145,7 +145,7 @@ class FAD(Metric):
         save_path = os.path.join(self.path, f"background_statistics_{self.name}.ptc")
         
         if os.path.exists(save_path):
-            return torch.load(save_path)
+            return torch.load(save_path, map_location=torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
         
         elif background:
             resample = T.Resample(48_000, SAMPLE_RATE)
