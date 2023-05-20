@@ -46,6 +46,7 @@ if __name__ == "__main__":
     from pydrive.drive import GoogleDrive
 
     gauth = GoogleAuth()
+    gauth.CommandLineAuth()
     drive = GoogleDrive(gauth)
 
 
