@@ -5,9 +5,10 @@ import torch.nn.functional as F
 class C3(Metric):
     def __init__(self, clasp):
         super().__init__()
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.clasp = clasp
-        self.add_state("similarity", torch.tensor(0.), dist_reduce_fx="sum")
-        self.add_state("num", torch.tensor(0), dist_reduce_fx="sum")
+        self.add_state("similarity", torch.tensor(0.).to(device), dist_reduce_fx="sum")
+        self.add_state("num", torch.tensor(0).to(device), dist_reduce_fx="sum")
 
     def update(self, preds, target):
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
