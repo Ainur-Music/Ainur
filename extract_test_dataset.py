@@ -43,7 +43,7 @@ if __name__ == "__main__":
     seed_everything(42, workers=True)
 
 
-    dataset = get_wav_filenames(["/Users/gio/spotdl"], recursive=False)
+    dataset = get_wav_filenames(["/home/gconcialdi/spotdl"], recursive=False)
 
     *_, test_dataset = random_split(dataset, [0.98, 0.005, 0.015], torch.Generator().manual_seed(42))
 
