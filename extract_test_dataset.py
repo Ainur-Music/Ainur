@@ -42,26 +42,10 @@ if __name__ == "__main__":
     from lightning.pytorch import seed_everything
     seed_everything(42, workers=True)
 
-    from pydrive.auth import GoogleAuth
-    from pydrive.drive import GoogleDrive
 
-    gauth = GoogleAuth()
-    gauth.CommandLineAuth()
-    drive = GoogleDrive(gauth)
-
-
-    dataset = get_wav_filenames(["/home/gconcialdi/spotdl"], recursive=False)
+    dataset = get_wav_filenames(["/Users/gio/spotdl"], recursive=False)
 
     *_, test_dataset = random_split(dataset, [0.98, 0.005, 0.015], torch.Generator().manual_seed(42))
 
-    folderName = 'Thesis'  # Please set the folder name.
-
-    folders = drive.ListFile(
-        {'q': "title='" + folderName + "' and mimeType='application/vnd.google-apps.folder' and trashed=false"}).GetList()
-    for folder in folders:
-        if folder['title'] == folderName:
-            for file_path in test_dataset:
-                file = drive.CreateFile({'title': os.path.basename(file_path), 'parents': [{'id': folder['id']}]})
-                file.SetContentFile(file_path)
-                file.Upload()
-                print('Uploaded file with ID {}'.format(file.get('id')))
+    for x in test_dataset:
+        print(x)
