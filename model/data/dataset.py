@@ -39,7 +39,6 @@ def groupby(prefix: str, d: Dict, keep_prefix: bool = False) -> Tuple[Dict, Dict
 def prefix_dict(prefix: str, d: Dict) -> Dict:
     return {prefix + str(k): v for k, v in d.items()}
 
-# Copied from ...
 def fast_scandir(path: str, exts: List[str], recursive: bool = False):
     # Scan files recursively faster than glob
     # From github.com/drscotthawley/aeiou/blob/main/aeiou/core.py
@@ -66,7 +65,7 @@ def fast_scandir(path: str, exts: List[str], recursive: bool = False):
 
     return subfolders, files
 
-# Adapted from ...
+
 def get_wav_filenames(paths: Sequence[str], recursive: bool) -> List[str]:
     extensions = [".wav", ".flac"]
     filenames = []
@@ -178,7 +177,4 @@ def get_dataset(path, sample_rate=48000, crop=2**20, wav_loudness=None, wav_scal
 
 
 if __name__ == "__main__":
-    dataset = get_dataset("/Users/gio/spotdl/", crop=2**20)
-    #dataset = get_dataset("/home/gconcialdi/spotdl/", crop=2**20)
-    for audio, text, lyrics in dataset:
-        print(audio.shape, text, lyrics)
+    pass

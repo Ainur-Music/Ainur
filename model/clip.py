@@ -151,13 +151,13 @@ if __name__ == "__main__":
     parser.add_argument("--num_nodes", type=int, default=1)
     parser.add_argument("--precision", type=str, default='16-mixed')
     parser.add_argument("--checkpoint_path", type=str, default=None)
-    parser.add_argument("--default_root_dir", type=str, default="/home/gconcialdi/ainur/runs/")
+    parser.add_argument("--default_root_dir", type=str, default="")
     parser.add_argument("--gradient_clip", type=float, default=1)
     parser.add_argument("--sanity_steps", type=int, default=0)
 
 
     # Hyperparameters for the model
-    parser.add_argument("--dataset_path", type=str, default="/home/gconcialdi/spotdl/")
+    parser.add_argument("--dataset_path", type=str, default="")
     parser.add_argument("--max_length", type=int, default=512)
     parser.add_argument("--crop", type=int, default=2**20)
     parser.add_argument("--batch_size", type=int, default=256)
@@ -167,14 +167,6 @@ if __name__ == "__main__":
 
     # Parse the user inputs and defaults (returns a argparse.Namespace)
     args = parser.parse_args()
-    
-    logger = CometLogger(
-        api_key="9LmOAqSG4omncUN3QT42iQoqb",
-        project_name="ainur",
-        workspace="gio99c",
-        experiment_name="clip",
-        offline=False
-        )
 
 
     clip = CLIP(max_length=args.max_length, crop=args.crop, batch_size=args.batch_size, dataset_path=args.dataset_path, num_workers=args.num_workers)
@@ -183,7 +175,6 @@ if __name__ == "__main__":
 
     checkpoint_callback = ModelCheckpoint(dirpath=os.path.join(args.default_root_dir, "clip/checkpoints/"))
     trainer = Trainer(max_epochs=args.epochs,
-                      logger=logger,
                       precision=args.precision,
                       accelerator=args.accelerator,
                       devices=args.n_devices,
