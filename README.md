@@ -5,6 +5,7 @@
 [![PyTorch](https://img.shields.io/badge/pytorch-1.13.1-blue)](https://pytorch.org/get-started/locally/)
 [![PyTorch Lightning](https://img.shields.io/badge/pytorch_lightning-2.0.0-blue)](https://pytorch-lightning.readthedocs.io/en/stable/)
 
+![ainur architecture (training & inference)](assets/ainur.png)
 Ainur is an innovative deep learning model for conditional multimodal music generation. It is designed to generate high-quality stereo music samples at 48 kHz conditioned on a variety of inputs, such as lyrics, text descriptors, and other audio. Ainur's hierarchical diffusion architecture, combined with CLASP embeddings, allows it to produce coherent and expressive music compositions across a wide range of genres and styles.
 
 ## Features
